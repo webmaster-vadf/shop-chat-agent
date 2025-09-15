@@ -1,0 +1,38 @@
+# fly.toml app configuration file generated for shop-chat-agent-bold-flower-713 on 2025-09-15T08:58:16+02:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'shop-chat-agent-bold-flower-713'
+primary_region = 'cdg'
+
+[build]
+
+[env]
+  PORT = '3000'
+  SCOPES = 'customer_read_customers,customer_read_orders,customer_read_store_credit_account_transactions,customer_read_store_credit_accounts,unauthenticated_read_product_listings'
+  SHOPIFY_API_KEY = 'a7942561f9df178de94e64915f32496a'
+  SHOPIFY_APP_URL = 'https://shop-chat-agent-bold-flower-713.fly.dev'
+
+[processes]
+  app = 'node ./dbsetup.js npm run docker-start'
+
+[[mounts]]
+  source = 'data'
+  destination = '/data'
+  auto_extend_size_threshold = 80
+  auto_extend_size_increment = '1GB'
+  auto_extend_size_limit = '10GB'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
