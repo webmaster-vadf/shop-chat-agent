@@ -35,6 +35,8 @@
   window.shopChatConfig = {
     promptType: {{ block.settings.system_prompt | json }},
     welcomeMessage: {{ block.settings.welcome_message | json }}
+    language: {{ block.settings.language | default: 'fr' | json }},
+    apiBaseUrl: {{ block.settings.api_base_url | default: 'https://shop-chat-agent-bold-flower-713.fly.dev' | json }}
   };
   window.shopId = {{ shop.id }};
 </script>

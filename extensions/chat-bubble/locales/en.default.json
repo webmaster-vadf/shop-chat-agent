@@ -3,6 +3,22 @@
     "title": "Store Assistant",
     "inputPlaceholder": "Type your message here...",
     "sendButton": "Send",
-    "closeButton": "Close"
+    "closeButton": "Close",
+    "typing": "Assistant is typing...",
+    "welcomeMessage": "👋 Hi there! How can I help you today?",
+    "errorMessage": "Sorry, I couldn't process your request. Please try again later.",
+    "authRequired": "You need to log in to access this feature.",
+    "authInProgress": "Authentication in progress. Please complete the process in the popup window.",
+    "authSuccess": "Authentication successful! I'm now continuing with your request.",
+    "loadingHistory": "Loading conversation history...",
+    "noProducts": "No products found",
+    "topProducts": "Top Matching Products",
+    "addToCart": "Add to Cart",
+    "proceedCheckout": "Proceed to Checkout",
+    "rateLimitError": "Sorry, our servers are currently busy. Please try again later.",
+    "connectionError": "Connection error. Please check your internet connection.",
+    "serverError": "Server error. Our technical team has been notified.",
+    "toolUsePrefix": "Calling tool:",
+    "authenticationNeeded": "Authentication needed to continue"
   }
 }

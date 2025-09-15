@@ -20,6 +20,7 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
    * @param {Object} params - Stream parameters
    * @param {Array} params.messages - Conversation history
    * @param {string} params.promptType - The type of system prompt to use
+   * @param {string} params.language - Language code (fr, en, etc.)
    * @param {Array} params.tools - Available tools for Claude
    * @param {Object} streamHandlers - Stream event handlers
    * @param {Function} streamHandlers.onText - Handles text chunks
@@ -30,10 +31,11 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
   const streamConversation = async ({
     messages,
     promptType = AppConfig.api.defaultPromptType,
+    language = 'fr', 
     tools
   }, streamHandlers) => {
     // Get system prompt from configuration or use default
-    const systemInstruction = getSystemPrompt(promptType);
+    const systemInstruction = getSystemPrompt(promptType, language);
 
     // Create stream
     const stream = await anthropic.messages.stream({
@@ -73,13 +75,23 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
   };
 
   /**
-   * Gets the system prompt content for a given prompt type
+   * Gets the system prompt content for a given prompt type and language
    * @param {string} promptType - The prompt type to retrieve
+   * @param {string} language - Language code (fr, en, etc.)
    * @returns {string} The system prompt content
    */
-  const getSystemPrompt = (promptType) => {
-    return systemPrompts.systemPrompts[promptType]?.content ||
+  const getSystemPrompt = (promptType, language = 'fr') => {
+    let basePrompt = systemPrompts.systemPrompts[promptType]?.content ||
       systemPrompts.systemPrompts[AppConfig.api.defaultPromptType].content;
+
+    // Add language-specific instructions
+    if (language === 'fr') {
+      basePrompt += '\n\nIMPORTANT : Répondez EXCLUSIVEMENT en français, même si la question est posée dans une autre langue. Utilisez un français naturel et professionnel.';
+    } else if (language === 'en') {
+      basePrompt += '\n\nIMPORTANT: Always respond in English, regardless of the customer\'s question language. Use natural and fluent English.';
+    }
+
+    return basePrompt;
   };
 
   return {
