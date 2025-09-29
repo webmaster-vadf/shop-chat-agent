@@ -51,8 +51,9 @@
     "@types/node": "^22.2.0",
     "@types/react": "^18.2.31",
     "@types/react-dom": "^18.2.14",
-    "eslint": "^8.42.0",
+    "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.0.1",
+    "estree-util-value-to-estree": "^3.4.0",
     "prettier": "^3.2.4",
     "typescript": "^5.2.2",
     "vite": "^6.2.2"

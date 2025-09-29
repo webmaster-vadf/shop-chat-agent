@@ -656,7 +656,7 @@
 
           // No messages, show welcome message
           if (!data.messages || data.messages.length === 0) {
-            const welcomeMessage = window.shopChatConfig?.welcomeMessage || "👋 Hi there! How can I help you today?";
+            const welcomeMessage = window.shopChatConfig?.welcomeMessage || "Bienvenue chez VADF ! Comment puis-je vous aider avec nos textiles éco-responsables Made in France ?";
             ShopAIChat.Message.add(welcomeMessage, 'assistant', messagesContainer);
             return;
           }
@@ -688,7 +688,7 @@
           }
 
           // Show error and welcome message
-          const welcomeMessage = window.shopChatConfig?.welcomeMessage || "👋 Hi there! How can I help you today?";
+          const welcomeMessage = window.shopChatConfig?.welcomeMessage || "Bienvenue chez VADF ! Comment puis-je vous aider avec nos textiles éco-responsables Made in France ?";
           ShopAIChat.Message.add(welcomeMessage, 'assistant', messagesContainer);
 
           // Clear the conversation ID since we couldn't fetch this conversation
@@ -920,7 +920,7 @@
         this.API.fetchChatHistory(conversationId, this.UI.elements.messagesContainer);
       } else {
         // No previous conversation, show welcome message
-        const welcomeMessage = window.shopChatConfig?.welcomeMessage || "👋 Hi there! How can I help you today?";
+        const welcomeMessage = window.shopChatConfig?.welcomeMessage || "Bienvenue chez VADF ! Comment puis-je vous aider avec nos textiles éco-responsables Made in France ?";
         this.Message.add(welcomeMessage, 'assistant', this.UI.elements.messagesContainer);
       }
     }
