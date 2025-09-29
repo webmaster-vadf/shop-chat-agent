@@ -1,0 +1,25 @@
+{
+  "activation_compte": [
+    "Après vérification, votre compte entreprise est bien activé sur le site VADF.",
+    "Après vérification, votre compte entreprise « ** » est associé à l’adresse email suivante « email@email.com ». Je viens de renvoyer l’email d’activation à cette adresse.",
+    "Vous recevrez un e-mail d’activation à l’adresse suivante : « … », permettant de créer votre mot de passe et de finaliser l’accès à votre compte.",
+    "Vous recevrez un e-mail d’invitation d’accès au nouveau site, afin que vous puissiez finaliser votre commande.",
+    "Vous recevrez un e-mail d’activation dans la journée de demain.",
+    "Une fois votre compte activé, vous pourrez vous connecter normalement."
+  ],
+  "mot_de_passe_oublie": [
+    "Vous recevrez prochainement un e-mail vous permettant de réinitialiser votre mot de passe.",
+    "Je vous invite à vérifier également vos courriers indésirables ou votre dossier spam si vous ne le trouvez pas dans votre boîte de réception.",
+    "Pensez à vérifier vos courriers indésirables ou spams si vous ne le voyez pas dans votre boîte de réception.",
+    "Je reste bien entendu à votre disposition en cas de blocage.",
+    "N’hésitez pas à me confirmer ces informations ou à me signaler tout autre blocage.",
+    "N’hésitez pas à me tenir informé si vous rencontrez toujours un blocage."
+  ],
+  "mise_a_jour_infos_entreprise": [
+    "Si vous souhaitez modifier l’adresse e-mail liée à votre compte entreprise, merci d’écrire à contact@vadf.fr afin que nous puissions mettre à jour les coordonnées de votre société.",
+    "Les coordonnées de l’entreprise « … » ont été mises à jour."
+  ],
+  "escalade_support": [
+    "Votre demande relative à l’ouverture d’un compte professionnel a été transmise à l’adresse dédiée : contact@vadf.fr, afin qu’elle puisse être examinée et traitée par l’équipe concernée."
+  ]
+}

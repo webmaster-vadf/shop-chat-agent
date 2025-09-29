@@ -8,6 +8,7 @@ import { saveMessage, getConversationHistory, storeCustomerAccountUrl, getCustom
 import AppConfig from "../services/config.server";
 import { createSseStream } from "../services/streaming.server";
 import { createClaudeService } from "../services/claude.server";
+import { VADFResponseManager } from "../services/vadf-response-manager";
 import { createToolService } from "../services/tool.server";
 import { unauthenticated } from "../shopify.server";
 
@@ -148,28 +149,22 @@ async function handleChatSession({
 
     // Connect to MCP servers and get available tools
     let storefrontMcpTools = [], customerMcpTools = [];
-
     try {
       storefrontMcpTools = await mcpClient.connectToStorefrontServer();
       customerMcpTools = await mcpClient.connectToCustomerServer();
-
       console.log(`Connected to MCP with ${storefrontMcpTools.length} tools`);
       console.log(`Connected to customer MCP with ${customerMcpTools.length} tools`);
     } catch (error) {
       console.warn('Failed to connect to MCP servers, continuing without tools:', error.message);
     }
 
-    // Prepare conversation state
+    // Préparer l'état de la conversation
     let conversationHistory = [];
     let productsToDisplay = [];
 
-    // Save user message to the database
+    // Sauvegarder le message utilisateur
     await saveMessage(conversationId, 'user', userMessage);
-
-    // Fetch all messages from the database for this conversation
     const dbMessages = await getConversationHistory(conversationId);
-
-    // Format messages for Claude API
     conversationHistory = dbMessages.map(dbMessage => {
       let content;
       try {
@@ -183,9 +178,30 @@ async function handleChatSession({
       };
     });
 
-    // Execute the conversation stream
-    let finalMessage = { role: 'user', content: userMessage };
+    // --- INTÉGRATION VADF ---
+    if (promptType === 'vadfAssistant') {
+      // Utilisation du gestionnaire VADF centralisé
+      const vadfManager = new VADFResponseManager();
+      const vadfIntent = vadfManager.detectIntent(userMessage);
+      // Enrichir le contexte avec des infos fictives ou à récupérer dynamiquement
+      const vadfContext = vadfManager.enrichContext({
+        isFirstMessage: conversationHistory.length <= 1
+        // Ajouter ici d'autres infos contextuelles si besoin (ex: statut compte, email, etc.)
+      });
+      const vadfResponse = vadfManager.getResponse(vadfIntent, vadfContext);
+      stream.sendMessage({
+        type: 'vadf_response',
+        text: vadfResponse.text,
+        vadf_intent: vadfIntent,
+        vadf_type: vadfResponse.type
+      });
+      stream.sendMessage({ type: 'end_turn' });
+      return;
+    }
+    // --- FIN INTÉGRATION VADF ---
 
+    // Sinon, flux Claude classique
+    let finalMessage = { role: 'user', content: userMessage };
     while (finalMessage.stop_reason !== "end_turn") {
       finalMessage = await claudeService.streamConversation(
         {
@@ -194,47 +210,33 @@ async function handleChatSession({
           tools: mcpClient.tools
         },
         {
-          // Handle text chunks
           onText: (textDelta) => {
             stream.sendMessage({
               type: 'chunk',
               chunk: textDelta
             });
           },
-
-          // Handle complete messages
           onMessage: (message) => {
             conversationHistory.push({
               role: message.role,
               content: message.content
             });
-
             saveMessage(conversationId, message.role, JSON.stringify(message.content))
               .catch((error) => {
                 console.error("Error saving message to database:", error);
               });
-
-            // Send a completion message
             stream.sendMessage({ type: 'message_complete' });
           },
-
-          // Handle tool use requests
           onToolUse: async (content) => {
             const toolName = content.name;
             const toolArgs = content.input;
             const toolUseId = content.id;
-
             const toolUseMessage = `Calling tool: ${toolName} with arguments: ${JSON.stringify(toolArgs)}`;
-
             stream.sendMessage({
               type: 'tool_use',
               tool_use_message: toolUseMessage
             });
-
-            // Call the tool
             const toolUseResponse = await mcpClient.callTool(toolName, toolArgs);
-
-            // Handle tool response based on success/error
             if (toolUseResponse.error) {
               await toolService.handleToolError(
                 toolUseResponse,
@@ -254,12 +256,8 @@ async function handleChatSession({
                 conversationId
               );
             }
-
-            // Signal new message to client
             stream.sendMessage({ type: 'new_message' });
           },
-
-          // Handle content block completion
           onContentBlock: (contentBlock) => {
             if (contentBlock.type === 'text') {
               stream.sendMessage({
@@ -271,11 +269,7 @@ async function handleChatSession({
         }
       );
     }
-
-    // Signal end of turn
     stream.sendMessage({ type: 'end_turn' });
-
-    // Send product results if available
     if (productsToDisplay.length > 0) {
       stream.sendMessage({
         type: 'product_results',
@@ -283,7 +277,6 @@ async function handleChatSession({
       });
     }
   } catch (error) {
-    // The streaming handler takes care of error handling
     throw error;
   }
 }
@@ -314,18 +307,18 @@ async function getCustomerMcpEndpoint(shopDomain, conversationId) {
       `#graphql
       query shop {
         shop {
-          customerAccountUrl
+          url
         }
       }`,
     );
 
     const body = await response.json();
-    const customerAccountUrl = body.data.shop.customerAccountUrl;
+    const shopUrl = body.data.shop.url;
 
-    // Store the customer account URL with conversation ID in the DB
-    await storeCustomerAccountUrl(conversationId, customerAccountUrl);
+    // Store the shop URL with conversation ID in the DB
+    await storeCustomerAccountUrl(conversationId, shopUrl);
 
-    return `${customerAccountUrl}/customer/api/mcp`;
+    return `${shopUrl}/customer/api/mcp`;
   } catch (error) {
     console.error("Error getting customer MCP endpoint:", error);
     return null;
