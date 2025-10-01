@@ -8,7 +8,8 @@ import { saveMessage, getConversationHistory, storeCustomerAccountUrl, getCustom
 import AppConfig from "../services/config.server";
 import { createSseStream } from "../services/streaming.server";
 import { createClaudeService } from "../services/claude.server";
-import { getVadfResponses } from "../services/vadf-response-manager";
+import { getVadfManager } from "../services/vadf-response-manager";
+import { checkVadfCustomerAccount } from "../services/vadf-customer-account.server";
 import { createToolService } from "../services/tool.server";
 import { unauthenticated } from "../shopify.server";
 
@@ -180,21 +181,58 @@ async function handleChatSession({
 
     // --- INTÉGRATION VADF ---
     if (promptType === 'vadfAssistant') {
-      // Utilisation du gestionnaire VADF centralisé
-      const vadfManager = new VADFResponseManager();
+      // Utilisation du gestionnaire VADF asynchrone
+      const vadfManager = await getVadfManager();
       const vadfIntent = vadfManager.detectIntent(userMessage);
-      // Enrichir le contexte avec des infos fictives ou à récupérer dynamiquement
-      const vadfContext = vadfManager.enrichContext({
+      let vadfContext = vadfManager.enrichContext({
         isFirstMessage: conversationHistory.length <= 1
-        // Ajouter ici d'autres infos contextuelles si besoin (ex: statut compte, email, etc.)
       });
-      const vadfResponse = vadfManager.getResponse(vadfIntent, vadfContext);
+
+      // Vérification du compte client si l'intention concerne le compte
+      let accountCheckResult = null;
+      if (["activation_compte", "mot_de_passe_oublie", "mise_a_jour_infos_entreprise"].includes(vadfIntent)) {
+        // Extraction naïve de l'email depuis le message utilisateur (améliorable)
+        const emailMatch = userMessage.match(/[\w.-]+@[\w.-]+\.[A-Za-z]{2,}/);
+        const email = emailMatch ? emailMatch[0] : undefined;
+        accountCheckResult = await checkVadfCustomerAccount({ email });
+        // Adapter le contexte selon le statut du compte
+        if (accountCheckResult.status === "active") {
+          vadfContext = { ...vadfContext, compte_actif: true };
+        } else if (accountCheckResult.status === "inactive") {
+          vadfContext = { ...vadfContext, compte_actif: false };
+        }
+      }
+
+      let vadfResponse = vadfManager.getResponse(vadfIntent, vadfContext);
+
+      // Si la vérification de compte a un message spécifique, on le priorise
+      if (accountCheckResult && accountCheckResult.message) {
+        vadfResponse = { ...vadfResponse, text: accountCheckResult.message };
+      }
+
       stream.sendMessage({
         type: 'vadf_response',
         text: vadfResponse.text,
         vadf_intent: vadfIntent,
         vadf_type: vadfResponse.type
       });
+
+      // Escalade automatique si utilisateur non pro
+      if (accountCheckResult && accountCheckResult.status === 'not_pro') {
+        stream.sendMessage({
+          type: 'escalade',
+          contact: accountCheckResult.contact,
+          message: 'Escalade automatique : utilisateur non professionnel.'
+        });
+      }
+      // Escalade intelligente : si besoin, notifier contact@vadf.fr
+      if (vadfIntent === 'escalade_support' || vadfResponse.type === 'error') {
+        stream.sendMessage({
+          type: 'escalade',
+          contact: 'contact@vadf.fr',
+          message: vadfManager.getCommonPhrase('contact_support')
+        });
+      }
       stream.sendMessage({ type: 'end_turn' });
       return;
     }

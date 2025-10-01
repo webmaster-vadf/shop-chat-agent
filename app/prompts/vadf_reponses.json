@@ -1,25 +1,148 @@
 {
-  "activation_compte": [
-    "Après vérification, votre compte entreprise est bien activé sur le site VADF.",
-    "Après vérification, votre compte entreprise « ** » est associé à l’adresse email suivante « email@email.com ». Je viens de renvoyer l’email d’activation à cette adresse.",
-    "Vous recevrez un e-mail d’activation à l’adresse suivante : « … », permettant de créer votre mot de passe et de finaliser l’accès à votre compte.",
-    "Vous recevrez un e-mail d’invitation d’accès au nouveau site, afin que vous puissiez finaliser votre commande.",
-    "Vous recevrez un e-mail d’activation dans la journée de demain.",
-    "Une fois votre compte activé, vous pourrez vous connecter normalement."
-  ],
-  "mot_de_passe_oublie": [
-    "Vous recevrez prochainement un e-mail vous permettant de réinitialiser votre mot de passe.",
-    "Je vous invite à vérifier également vos courriers indésirables ou votre dossier spam si vous ne le trouvez pas dans votre boîte de réception.",
-    "Pensez à vérifier vos courriers indésirables ou spams si vous ne le voyez pas dans votre boîte de réception.",
-    "Je reste bien entendu à votre disposition en cas de blocage.",
-    "N’hésitez pas à me confirmer ces informations ou à me signaler tout autre blocage.",
-    "N’hésitez pas à me tenir informé si vous rencontrez toujours un blocage."
-  ],
-  "mise_a_jour_infos_entreprise": [
-    "Si vous souhaitez modifier l’adresse e-mail liée à votre compte entreprise, merci d’écrire à contact@vadf.fr afin que nous puissions mettre à jour les coordonnées de votre société.",
-    "Les coordonnées de l’entreprise « … » ont été mises à jour."
-  ],
-  "escalade_support": [
-    "Votre demande relative à l’ouverture d’un compte professionnel a été transmise à l’adresse dédiée : contact@vadf.fr, afin qu’elle puisse être examinée et traitée par l’équipe concernée."
-  ]
+  "meta": {
+    "version": "1.0.0",
+    "lastUpdated": "2025-09-30",
+    "author": "VADF",
+    "description": "Réponses-types VADF structurées par intention, avec variables, gestion d'erreur et contexte."
+  },
+  "categories": {
+    "compte": ["activation_compte", "mot_de_passe_oublie", "mise_a_jour_infos_entreprise"],
+    "support": ["escalade_support", "erreur_generique"],
+    "produit": ["origine_produit", "personnalisation", "b2b_only"],
+    "general": ["salutation", "remerciement", "au_revoir"]
+  },
+  "intents": {
+    "activation_compte": {
+      "description": "Activation ou réactivation d'un compte entreprise.",
+      "responses": [
+        {
+          "text": "✅ Après vérification, votre compte entreprise est bien activé sur le site VADF.",
+          "conditions": ["compte_actif == true"]
+        },
+        {
+          "text": "📧 Je viens de renvoyer l'email d'activation à l'adresse {{email}}.",
+          "conditions": ["email_renvoye == true"],
+          "variables": ["email"]
+        },
+        {
+          "text": "✉️ Vous recevrez un e-mail d'activation à l'adresse {{email}}, permettant de créer votre mot de passe.",
+          "conditions": ["nouveau_compte == true"],
+          "variables": ["email"]
+        }
+      ]
+    },
+    "mot_de_passe_oublie": {
+      "description": "Réinitialisation du mot de passe.",
+      "responses": [
+        {
+          "text": "Vous recevrez prochainement un e-mail pour réinitialiser votre mot de passe.",
+          "conditions": ["reset_envoye == true"]
+        },
+        {
+          "text": "📥 Pensez à vérifier vos courriers indésirables ou spam.",
+          "conditions": []
+        },
+        {
+          "text": "💬 Je reste à votre disposition en cas de blocage.",
+          "conditions": []
+        }
+      ]
+    },
+    "mise_a_jour_infos_entreprise": {
+      "description": "Mise à jour des informations de l'entreprise.",
+      "responses": [
+        {
+          "text": "✏️ Merci d'écrire à contact@vadf.fr pour mettre à jour vos coordonnées.",
+          "conditions": ["changement_email == true"]
+        },
+        {
+          "text": "Les coordonnées de l'entreprise {{nom_entreprise}} ont été mises à jour.",
+          "conditions": ["maj_effectuee == true"],
+          "variables": ["nom_entreprise"]
+        }
+      ]
+    },
+    "escalade_support": {
+      "description": "Escalade vers le support VADF.",
+      "responses": [
+        {
+          "text": "📤 Votre demande a été transmise à contact@vadf.fr pour un traitement personnalisé.",
+          "conditions": ["escalade == true"]
+        },
+        {
+          "text": "Par e-mail\nSupport général : contact@vadf.fr",
+          "conditions": ["escalade == true"]
+        }
+      ]
+    },
+    "origine_produit": {
+      "description": "Questions sur l'origine des produits.",
+      "responses": [
+        {
+          "text": "🌿 Tous nos produits sont fabriqués en France avec des matières bio/recyclées.",
+          "conditions": []
+        }
+      ]
+    },
+    "personnalisation": {
+      "description": "Personnalisation des produits.",
+      "responses": [
+        {
+          "text": "🎨 Nos produits sont entièrement personnalisables selon vos besoins (broderie, sérigraphie, impression numérique).",
+          "conditions": []
+        }
+      ]
+    },
+    "b2b_only": {
+      "description": "Rappel du modèle B2B uniquement.",
+      "responses": [
+        {
+          "text": "🏢 VADF travaille exclusivement en B2B. Créez un compte entreprise pour accéder à nos tarifs.",
+          "conditions": []
+        }
+      ]
+    },
+    "salutation": {
+      "description": "Salutation d'accueil.",
+      "responses": [
+        { "text": "👋 Bonjour et bienvenue chez VADF !", "conditions": ["isFirstMessage == true"] }
+      ]
+    },
+    "remerciement": {
+      "description": "Remerciement.",
+      "responses": [
+        { "text": "🙏 Merci pour votre message !", "conditions": [] }
+      ]
+    },
+    "au_revoir": {
+      "description": "Message de clôture.",
+      "responses": [
+        { "text": "👋 Au revoir et à bientôt sur vadf.fr !", "conditions": [] }
+      ]
+    },
+    "erreur_generique": {
+      "description": "Gestion des erreurs ou incompréhensions.",
+      "responses": [
+        { "text": "❗ Je n'ai pas compris votre demande. Pouvez-vous reformuler ou écrire à contact@vadf.fr ?", "conditions": ["intent_non_reconnue == true"] }
+      ]
+    }
+  },
+  "common_phrases": {
+    "wait": "⏳ Un instant, je vérifie cela pour vous...",
+    "contact_support": "Pour toute demande complexe, contactez-nous à contact@vadf.fr.",
+    "error": "❗ Une erreur est survenue. Merci de réessayer ou d'écrire à contact@vadf.fr."
+  },
+  "context": {
+    "isFirstMessage": false,
+    "compte_actif": null,
+    "email_renvoye": null,
+    "nouveau_compte": null,
+    "reset_envoye": null,
+    "changement_email": null,
+    "maj_effectuee": null,
+    "escalade": null,
+    "intent_non_reconnue": null,
+    "email": null,
+    "nom_entreprise": null
+  }
 }
