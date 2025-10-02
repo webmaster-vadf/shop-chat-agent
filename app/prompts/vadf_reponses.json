@@ -105,7 +105,10 @@
     "salutation": {
       "description": "Salutation d'accueil.",
       "responses": [
-        { "text": "👋 Bonjour et bienvenue chez VADF !", "conditions": ["isFirstMessage == true"] }
+        {
+          "text": "Je suis chatbot VADF ! 👋\n\nJe suis là pour vous aider avec les questions concernant :\n\n- Nos produits et leurs caractéristiques\n- Les commandes et le processus d'achat\n- Tout autre aspect de notre service\n\nComment puis-je vous assister aujourd'hui ?",
+          "conditions": ["isFirstMessage == true"]
+        }
       ]
     },
     "remerciement": {

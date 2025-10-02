@@ -475,7 +475,7 @@
         let currentMessageElement = null;
 
         try {
-          const promptType = window.shopChatConfig?.promptType || "standardAssistant";
+          const promptType = window.shopChatConfig?.promptType;
           const requestBody = JSON.stringify({
             message: userMessage,
             conversation_id: conversationId,

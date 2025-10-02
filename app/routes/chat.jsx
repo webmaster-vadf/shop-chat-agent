@@ -190,10 +190,11 @@ async function handleChatSession({
 
       // Vérification du compte client si l'intention concerne le compte
       let accountCheckResult = null;
+      let email;
       if (["activation_compte", "mot_de_passe_oublie", "mise_a_jour_infos_entreprise"].includes(vadfIntent)) {
         // Extraction naïve de l'email depuis le message utilisateur (améliorable)
         const emailMatch = userMessage.match(/[\w.-]+@[\w.-]+\.[A-Za-z]{2,}/);
-        const email = emailMatch ? emailMatch[0] : undefined;
+        email = emailMatch ? emailMatch[0] : undefined;
         accountCheckResult = await checkVadfCustomerAccount({ email });
         // Adapter le contexte selon le statut du compte
         if (accountCheckResult.status === "active") {
@@ -203,6 +204,16 @@ async function handleChatSession({
         }
       }
 
+      // Enrichir le contexte client avec des infos supplémentaires si disponibles
+      if (accountCheckResult) {
+        vadfContext = {
+          ...vadfContext,
+          email: email,
+          nom: accountCheckResult.nom || undefined,
+          statut_pro: accountCheckResult.status || undefined,
+          telephone: accountCheckResult.telephone || undefined
+        };
+      }
       let vadfResponse = vadfManager.getResponse(vadfIntent, vadfContext);
 
       // Si la vérification de compte a un message spécifique, on le priorise
