@@ -4,14 +4,14 @@
  */
 import { json } from "@remix-run/node";
 import MCPClient from "../mcp-client";
-import { saveMessage, getConversationHistory, storeurl, geturl } from "../db.server";
+import { saveMessage, getConversationHistory, storeCustomerAccountUrl, getCustomerAccountUrl } from "../db.server";
 import AppConfig from "../services/config.server";
 import { createSseStream } from "../services/streaming.server";
 import { createClaudeService } from "../services/claude.server";
-import { getVadfManager } from "../services/vadf-response-manager";
-import { checkVadfCustomerAccount } from "../services/vadf-customer-account.server";
 import { createToolService } from "../services/tool.server";
 import { unauthenticated } from "../shopify.server";
+import { getVadfManager } from "../services/vadf-response-manager.js";
+import { checkVadfCustomerAccount } from "../services/vadf-customer-account.server.js";
 
 
 /**
@@ -186,7 +186,7 @@ async function handleChatSession({
       const vadfIntent = vadfManager.detectIntent(userMessage);
 
       // Si aucun intent VADF n'est détecté, basculer vers Claude + MCP
-      if (!vadfIntent || vadfIntent === 'unknown' || vadfIntent === 'salutation') {
+      if (!vadfIntent || vadfIntent === 'unknown') {
         console.log('[SESSION] No specific VADF intent detected, falling back to Claude + MCP for:', vadfIntent);
         // Ne pas retourner ici, laisser continuer vers le flux Claude
       } else {
@@ -348,8 +348,14 @@ async function handleChatSession({
  */
 async function getCustomerMcpEndpoint(shopDomain, conversationId) {
   try {
+    // Check if shopDomain is provided
+    if (!shopDomain) {
+      console.warn('No shop domain provided, skipping customer MCP endpoint setup');
+      return null;
+    }
+
     // Check if the customer account URL exists in the DB
-    const existingUrl = await geturl(conversationId);
+    const existingUrl = await getCustomerAccountUrl(conversationId);
 
     // If URL exists, return early with the MCP endpoint
     if (existingUrl) {
@@ -366,18 +372,20 @@ async function getCustomerMcpEndpoint(shopDomain, conversationId) {
       `#graphql
       query shop {
         shop {
-          url
+          customerAccountsV2 {
+            url
+          }
         }
       }`,
     );
 
     const body = await response.json();
-    const url = body.data.shop.url;
+    const customerAccountUrl = body.data.shop.customerAccountsV2.url;
 
     // Store the customer account URL with conversation ID in the DB
-    await storeurl(conversationId, url);
+    await storeCustomerAccountUrl(conversationId, customerAccountUrl);
 
-    return `${url}/customer/api/mcp`;
+    return `${customerAccountUrl}/customer/api/mcp`;
   } catch (error) {
     console.error("Error getting customer MCP endpoint:", error);
     return null;

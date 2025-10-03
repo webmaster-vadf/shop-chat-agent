@@ -482,9 +482,15 @@
             prompt_type: promptType,
              language: 'fr'
           });
-          
-          const streamUrl = 'https://shop-chat-agent-bold-flower-713.fly.dev/chat';
+
+          // Use the configured API base URL
+          const apiBaseUrl = window.shopChatConfig?.apiBaseUrl || window.location.origin;
+          const streamUrl = apiBaseUrl + '/chat';
           const shopId = window.shopId;
+
+          console.log('[Chat] Sending request to:', streamUrl);
+          console.log('[Chat] Request body:', requestBody);
+          console.log('[Chat] Shop ID:', shopId);
 
           const response = await fetch(streamUrl, {
             method: 'POST',
@@ -495,6 +501,9 @@
             },
             body: requestBody
           });
+
+          console.log('[Chat] Response status:', response.status);
+          console.log('[Chat] Response headers:', Object.fromEntries(response.headers.entries()));
 
           const reader = response.body.getReader();
           const decoder = new TextDecoder();
@@ -521,16 +530,18 @@
               if (line.startsWith('data: ')) {
                 try {
                   const data = JSON.parse(line.slice(6));
+                  console.log('[Chat] Received event:', data.type, data);
                   this.handleStreamEvent(data, currentMessageElement, messagesContainer, userMessage,
                     (newElement) => { currentMessageElement = newElement; });
                 } catch (e) {
-                  console.error('Error parsing event data:', e, line);
+                  console.error('[Chat] Error parsing event data:', e, line);
                 }
               }
             }
           }
+          console.log('[Chat] Stream completed');
         } catch (error) {
-          console.error('Error in streaming:', error);
+          console.error('[Chat] Error in streaming:', error);
           ShopAIChat.UI.removeTypingIndicator();
           ShopAIChat.Message.add("Sorry, I couldn't process your request. Please try again later.",
             'assistant', messagesContainer);
@@ -548,12 +559,14 @@
       handleStreamEvent: function(data, currentMessageElement, messagesContainer, userMessage, updateCurrentElement) {
         switch (data.type) {
           case 'id':
+            console.log('[Chat] Conversation ID:', data.conversation_id);
             if (data.conversation_id) {
               sessionStorage.setItem('shopAiConversationId', data.conversation_id);
             }
             break;
 
           case 'chunk':
+            console.log('[Chat] Chunk received:', data.chunk);
             ShopAIChat.UI.removeTypingIndicator();
             currentMessageElement.dataset.rawText += data.chunk;
             currentMessageElement.textContent = currentMessageElement.dataset.rawText;
@@ -561,37 +574,42 @@
             break;
 
           case 'message_complete':
+            console.log('[Chat] Message complete');
             ShopAIChat.UI.removeTypingIndicator();
             ShopAIChat.Formatting.formatMessageContent(currentMessageElement);
             ShopAIChat.UI.scrollToBottom();
             break;
 
           case 'end_turn':
+            console.log('[Chat] End turn');
             ShopAIChat.UI.removeTypingIndicator();
             break;
 
           case 'error':
-            console.error('Stream error:', data.error);
+            console.error('[Chat] Stream error:', data.error);
             ShopAIChat.UI.removeTypingIndicator();
             currentMessageElement.textContent = "Sorry, I couldn't process your request. Please try again later.";
             break;
 
           case 'rate_limit_exceeded':
-            console.error('Rate limit exceeded:', data.error);
+            console.error('[Chat] Rate limit exceeded:', data.error);
             ShopAIChat.UI.removeTypingIndicator();
             currentMessageElement.textContent = "Sorry, our servers are currently busy. Please try again later.";
             break;
 
           case 'auth_required':
+            console.log('[Chat] Auth required');
             // Save the last user message for resuming after authentication
             sessionStorage.setItem('shopAiLastMessage', userMessage || '');
             break;
 
           case 'product_results':
+            console.log('[Chat] Product results:', data.products);
             ShopAIChat.UI.displayProductResults(data.products);
             break;
 
           case 'tool_use':
+            console.log('[Chat] Tool use:', data.tool_use_message);
             if (data.tool_use_message) {
               ShopAIChat.Message.addToolUse(data.tool_use_message, messagesContainer);
             }
@@ -615,6 +633,33 @@
           case 'content_block_complete':
             ShopAIChat.UI.showTypingIndicator();
             break;
+
+          case 'vadf_response':
+            console.log('[Chat] VADF response:', data);
+            ShopAIChat.UI.removeTypingIndicator();
+            if (data.text) {
+              currentMessageElement.dataset.rawText = data.text;
+              currentMessageElement.textContent = data.text;
+              ShopAIChat.Formatting.formatMessageContent(currentMessageElement);
+            }
+            ShopAIChat.UI.scrollToBottom();
+            break;
+
+          case 'escalade':
+            console.log('[Chat] Escalade:', data);
+            // Optionally show escalation message
+            if (data.message) {
+              const escaladeElement = document.createElement('div');
+              escaladeElement.classList.add('shop-ai-message', 'assistant', 'escalade');
+              escaladeElement.textContent = data.message;
+              messagesContainer.appendChild(escaladeElement);
+              ShopAIChat.UI.scrollToBottom();
+            }
+            break;
+
+          default:
+            console.warn('[Chat] Unknown event type:', data.type, data);
+            break;
         }
       },
 
@@ -632,7 +677,8 @@
           messagesContainer.appendChild(loadingMessage);
 
           // Fetch history from the server
-          const historyUrl = `https://shop-chat-agent-bold-flower-713.fly.dev/chat?history=true&conversation_id=${encodeURIComponent(conversationId)}`;
+          const apiBaseUrl = window.shopChatConfig?.apiBaseUrl || window.location.origin;
+          const historyUrl = `${apiBaseUrl}/chat?history=true&conversation_id=${encodeURIComponent(conversationId)}`;
           console.log('Fetching history from:', historyUrl);
 
           const response = await fetch(historyUrl, {
@@ -781,7 +827,8 @@
           attemptCount++;
 
           try {
-            const tokenUrl = 'https://shop-chat-agent-bold-flower-713.fly.dev/auth/token-status?conversation_id=' + encodeURIComponent(conversationId); 
+            const apiBaseUrl = window.shopChatConfig?.apiBaseUrl || window.location.origin;
+            const tokenUrl = apiBaseUrl + '/auth/token-status?conversation_id=' + encodeURIComponent(conversationId);
             const response = await fetch(tokenUrl);
 
             if (!response.ok) {
@@ -906,9 +953,16 @@
      * Initialize the chat application
      */
     init: function() {
+      console.log('[Chat] Initializing chat application');
+      console.log('[Chat] Config:', window.shopChatConfig);
+      console.log('[Chat] Shop ID:', window.shopId);
+
       // Initialize UI
       const container = document.querySelector('.shop-ai-chat-container');
-      if (!container) return;
+      if (!container) {
+        console.error('[Chat] Container not found');
+        return;
+      }
 
       this.UI.init(container);
 

@@ -142,13 +142,28 @@ Tools are invoked during Claude's response generation when needed to answer user
 
 ### VADF Custom Mode
 
-When `promptType: 'vadfAssistant'`, the system bypasses Claude and uses rule-based intent detection:
-- Detects intents like "activation_compte", "mot_de_passe_oublie", "mise_a_jour_infos_entreprise"
-- Checks customer account status via custom logic
-- Returns templated responses from `app/prompts/vadf_reponses.json`
-- Triggers support escalation for non-professional accounts
+When `promptType: 'vadfAssistant'`, the system uses hybrid intent detection with MCP fallback:
+- **VADF-specific intents** (handled by rule-based system):
+  - Account management: `activation_compte`, `mot_de_passe_oublie`, `mise_a_jour_infos_entreprise`
+  - Support: `escalade_support`
+  - Product info: `origine_produit`, `personnalisation`, `b2b_only`
+  - Checks customer account status via `vadf-customer-account.server.js`
+  - Returns templated responses from `app/prompts/vadf_reponses.json`
+  - Triggers support escalation for non-professional accounts
 
-This mode is for specialized business workflows requiring deterministic responses.
+- **MCP fallback** (product search, cart, orders):
+  - Generic queries: `unknown`, `salutation`, `remerciement`, `au_revoir`
+  - Product keywords: "produit", "cherche", "prix", "stock", "commander", "panier"
+  - Automatically switches to Claude + MCP Storefront tools
+  - Uses system prompt from `prompts.json` with VADF branding
+
+**Intent Detection Flow:**
+1. Check if message contains product keywords → MCP
+2. Check for VADF-specific account/support keywords → VADF responses
+3. Check for generic greetings/thanks → MCP
+4. Default → MCP
+
+This hybrid mode provides deterministic responses for account management while leveraging AI for product discovery.
 
 ### Deployment
 
