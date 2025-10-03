@@ -4,7 +4,7 @@
  */
 import { json } from "@remix-run/node";
 import MCPClient from "../mcp-client";
-import { saveMessage, getConversationHistory, storeCustomerAccountUrl, getCustomerAccountUrl } from "../db.server";
+import { saveMessage, getConversationHistory, storeurl, geturl } from "../db.server";
 import AppConfig from "../services/config.server";
 import { createSseStream } from "../services/streaming.server";
 import { createClaudeService } from "../services/claude.server";
@@ -349,7 +349,7 @@ async function handleChatSession({
 async function getCustomerMcpEndpoint(shopDomain, conversationId) {
   try {
     // Check if the customer account URL exists in the DB
-    const existingUrl = await getCustomerAccountUrl(conversationId);
+    const existingUrl = await geturl(conversationId);
 
     // If URL exists, return early with the MCP endpoint
     if (existingUrl) {
@@ -372,12 +372,12 @@ async function getCustomerMcpEndpoint(shopDomain, conversationId) {
     );
 
     const body = await response.json();
-    const shopUrl = body.data.shop.url;
+    const url = body.data.shop.url;
 
-    // Store the shop URL with conversation ID in the DB
-    await storeCustomerAccountUrl(conversationId, shopUrl);
+    // Store the customer account URL with conversation ID in the DB
+    await storeurl(conversationId, url);
 
-    return `${shopUrl}/customer/api/mcp`;
+    return `${url}/customer/api/mcp`;
   } catch (error) {
     console.error("Error getting customer MCP endpoint:", error);
     return null;
