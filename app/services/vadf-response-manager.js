@@ -22,25 +22,39 @@ class VADFResponseManager {
   detectIntent(message) {
     const msg = message.toLowerCase();
     const intents = Object.keys(this.responses.intents);
+
     // Mapping simple mots-clés -> intention
-    const mapping = {
+    // Intents spécifiques VADF (gestion de compte, support)
+    const specificMapping = {
       activation_compte: ["activer", "activation", "compte", "inscription"],
       mot_de_passe_oublie: ["mot de passe", "oublié", "reset", "réinitialiser"],
       mise_a_jour_infos_entreprise: ["mettre à jour", "modifier", "email", "coordonnées", "changement"],
-      escalade_support: ["problème", "erreur", "support", "contact", "bloqué", "aide"],
-      origine_produit: ["origine", "fabriqué", "france", "bio", "recyclé"],
-      personnalisation: ["personnaliser", "broderie", "sérigraphie", "impression"],
-      b2b_only: ["particulier", "b2c", "prix public", "tarif public"],
-      salutation: ["bonjour", "salut", "hello"],
-      remerciement: ["merci", "thanks", "remeciement"],
+      escalade_support: ["problème complexe", "support technique", "bloqué", "bug"],
+    };
+
+    // Intents génériques (à renvoyer vers MCP si détectés)
+    const genericMapping = {
+      salutation: ["bonjour", "salut", "hello", "hi"],
+      remerciement: ["merci", "thanks"],
       au_revoir: ["au revoir", "bye", "à bientôt"]
     };
-    for (const [intent, keywords] of Object.entries(mapping)) {
+
+    // Chercher d'abord les intents spécifiques
+    for (const [intent, keywords] of Object.entries(specificMapping)) {
       if (keywords.some(k => msg.includes(k))) {
         return intent;
       }
     }
-    return "erreur_generique";
+
+    // Si intent générique détecté, retourner 'unknown' pour fallback MCP
+    for (const [intent, keywords] of Object.entries(genericMapping)) {
+      if (keywords.some(k => msg.includes(k))) {
+        return "unknown"; // Force fallback vers MCP
+      }
+    }
+
+    // Aucun intent détecté = fallback vers MCP
+    return "unknown";
   }
 
   // Sélection intelligente de la meilleure réponse selon le contexte

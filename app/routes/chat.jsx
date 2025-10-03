@@ -179,73 +179,83 @@ async function handleChatSession({
       };
     });
 
-    // --- INTÉGRATION VADF ---
+    // --- INTÉGRATION VADF AVEC FALLBACK MCP ---
     if (promptType === 'vadfAssistant') {
       // Utilisation du gestionnaire VADF asynchrone
       const vadfManager = await getVadfManager();
       const vadfIntent = vadfManager.detectIntent(userMessage);
-      let vadfContext = vadfManager.enrichContext({
-        isFirstMessage: conversationHistory.length <= 1
-      });
 
-      // Vérification du compte client si l'intention concerne le compte
-      let accountCheckResult = null;
-      let email;
-      if (["activation_compte", "mot_de_passe_oublie", "mise_a_jour_infos_entreprise"].includes(vadfIntent)) {
-        // Extraction naïve de l'email depuis le message utilisateur (améliorable)
-        const emailMatch = userMessage.match(/[\w.-]+@[\w.-]+\.[A-Za-z]{2,}/);
-        email = emailMatch ? emailMatch[0] : undefined;
-        accountCheckResult = await checkVadfCustomerAccount({ email });
-        // Adapter le contexte selon le statut du compte
-        if (accountCheckResult.status === "active") {
-          vadfContext = { ...vadfContext, compte_actif: true };
-        } else if (accountCheckResult.status === "inactive") {
-          vadfContext = { ...vadfContext, compte_actif: false };
+      // Si aucun intent VADF n'est détecté, basculer vers Claude + MCP
+      if (!vadfIntent || vadfIntent === 'unknown' || vadfIntent === 'salutation') {
+        console.log('[SESSION] No specific VADF intent detected, falling back to Claude + MCP for:', vadfIntent);
+        // Ne pas retourner ici, laisser continuer vers le flux Claude
+      } else {
+        // Intent VADF spécifique détecté, traiter avec le système VADF
+        console.log('[SESSION] VADF intent detected:', vadfIntent);
+
+        let vadfContext = vadfManager.enrichContext({
+          isFirstMessage: conversationHistory.length <= 1
+        });
+
+        // Vérification du compte client si l'intention concerne le compte
+        let accountCheckResult = null;
+        let email;
+        if (["activation_compte", "mot_de_passe_oublie", "mise_a_jour_infos_entreprise"].includes(vadfIntent)) {
+          // Extraction naïve de l'email depuis le message utilisateur (améliorable)
+          const emailMatch = userMessage.match(/[\w.-]+@[\w.-]+\.[A-Za-z]{2,}/);
+          email = emailMatch ? emailMatch[0] : undefined;
+          accountCheckResult = await checkVadfCustomerAccount({ email });
+          // Adapter le contexte selon le statut du compte
+          if (accountCheckResult.status === "active") {
+            vadfContext = { ...vadfContext, compte_actif: true };
+          } else if (accountCheckResult.status === "inactive") {
+            vadfContext = { ...vadfContext, compte_actif: false };
+          }
         }
-      }
 
-      // Enrichir le contexte client avec des infos supplémentaires si disponibles
-      if (accountCheckResult) {
-        vadfContext = {
-          ...vadfContext,
-          email: email,
-          nom: accountCheckResult.nom || undefined,
-          statut_pro: accountCheckResult.status || undefined,
-          telephone: accountCheckResult.telephone || undefined
-        };
-      }
-      let vadfResponse = vadfManager.getResponse(vadfIntent, vadfContext);
+        // Enrichir le contexte client avec des infos supplémentaires si disponibles
+        if (accountCheckResult) {
+          vadfContext = {
+            ...vadfContext,
+            email: email,
+            nom: accountCheckResult.nom || undefined,
+            statut_pro: accountCheckResult.status || undefined,
+            telephone: accountCheckResult.telephone || undefined
+          };
+        }
+        let vadfResponse = vadfManager.getResponse(vadfIntent, vadfContext);
 
-      // Si la vérification de compte a un message spécifique, on le priorise
-      if (accountCheckResult && accountCheckResult.message) {
-        vadfResponse = { ...vadfResponse, text: accountCheckResult.message };
-      }
+        // Si la vérification de compte a un message spécifique, on le priorise
+        if (accountCheckResult && accountCheckResult.message) {
+          vadfResponse = { ...vadfResponse, text: accountCheckResult.message };
+        }
 
-      stream.sendMessage({
-        type: 'vadf_response',
-        text: vadfResponse.text,
-        vadf_intent: vadfIntent,
-        vadf_type: vadfResponse.type
-      });
-
-      // Escalade automatique si utilisateur non pro
-      if (accountCheckResult && accountCheckResult.status === 'not_pro') {
         stream.sendMessage({
-          type: 'escalade',
-          contact: accountCheckResult.contact,
-          message: 'Escalade automatique : utilisateur non professionnel.'
+          type: 'vadf_response',
+          text: vadfResponse.text,
+          vadf_intent: vadfIntent,
+          vadf_type: vadfResponse.type
         });
+
+        // Escalade automatique si utilisateur non pro
+        if (accountCheckResult && accountCheckResult.status === 'not_pro') {
+          stream.sendMessage({
+            type: 'escalade',
+            contact: accountCheckResult.contact,
+            message: 'Escalade automatique : utilisateur non professionnel.'
+          });
+        }
+        // Escalade intelligente : si besoin, notifier contact@vadf.fr
+        if (vadfIntent === 'escalade_support' || vadfResponse.type === 'error') {
+          stream.sendMessage({
+            type: 'escalade',
+            contact: 'contact@vadf.fr',
+            message: vadfManager.getCommonPhrase('contact_support')
+          });
+        }
+        stream.sendMessage({ type: 'end_turn' });
+        return;
       }
-      // Escalade intelligente : si besoin, notifier contact@vadf.fr
-      if (vadfIntent === 'escalade_support' || vadfResponse.type === 'error') {
-        stream.sendMessage({
-          type: 'escalade',
-          contact: 'contact@vadf.fr',
-          message: vadfManager.getCommonPhrase('contact_support')
-        });
-      }
-      stream.sendMessage({ type: 'end_turn' });
-      return;
     }
     // --- FIN INTÉGRATION VADF ---
 
