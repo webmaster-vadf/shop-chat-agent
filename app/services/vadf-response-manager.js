@@ -36,13 +36,15 @@ class VADFResponseManager {
     // Mapping simple mots-clés -> intention
     // Intents spécifiques VADF (gestion de compte, support)
     const specificMapping = {
-      activation_compte: ["activer", "activation", "compte", "inscription"],
+      creation_compte: ["créer un compte", "créer compte", "ouvrir un compte", "inscription", "s'inscrire", "nouveau compte"],
+      activation_compte: ["activer", "activation", "compte pas activé", "accès au site"],
       mot_de_passe_oublie: ["mot de passe", "oublié", "reset", "réinitialiser"],
       mise_a_jour_infos_entreprise: ["mettre à jour", "modifier", "email", "coordonnées", "changement"],
       escalade_support: ["problème complexe", "support technique", "bloqué", "bug"],
       origine_produit: ["origine", "fabriqué", "provenance", "made in"],
       personnalisation: ["personnaliser", "personnalisation", "broderie", "sérigraphie", "impression"],
-      b2b_only: ["b2b", "particulier", "professionnel", "entreprise"]
+      b2b_only: ["b2b", "particulier", "professionnel", "entreprise"],
+      faq: ["faq", "aide", "question", "informations"]
     };
 
     // Intents génériques (à renvoyer vers MCP si détectés)

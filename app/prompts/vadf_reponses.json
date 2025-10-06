@@ -6,19 +6,34 @@
     "description": "Réponses-types VADF avec ton professionnel et chaleureux, optimisées pour l'assistance client B2B."
   },
   "categories": {
-    "compte": ["activation_compte", "mot_de_passe_oublie", "mise_a_jour_infos_entreprise"],
-    "support": ["escalade_support", "erreur_generique"],
+    "compte": ["creation_compte", "activation_compte", "mot_de_passe_oublie", "mise_a_jour_infos_entreprise"],
+    "support": ["escalade_support", "erreur_generique", "faq"],
     "produit": ["origine_produit", "personnalisation", "b2b_only"],
     "general": ["salutation", "remerciement", "au_revoir"]
   },
   "intents": {
+    "creation_compte": {
+      "description": "Création d'un nouveau compte professionnel.",
+      "examples": [
+        "Créer un compte professionnel",
+        "Je souhaite créer un compte VADF",
+        "Comment créer un compte entreprise",
+        "Inscription compte professionnel",
+        "Ouvrir un compte B2B"
+      ],
+      "responses": [
+        {
+          "text": "Pour créer votre compte professionnel VADF, rendez-vous sur notre page d'inscription :\n\n👉 https://vadf.fr/account/register\n\nVous pourrez y renseigner les informations de votre entreprise et créer votre compte.\n\nUne fois inscrit, vous recevrez un e-mail d'activation pour finaliser la création de votre compte.\n\nPour plus d'informations, consultez notre FAQ : https://vadf.fr/pages/faq",
+          "conditions": []
+        }
+      ]
+    },
     "activation_compte": {
       "description": "Activation ou réactivation d'un compte entreprise.",
       "examples": [
         "Je n'ai pas reçu l'e-mail d'activation de mon compte",
         "Je n'arrive pas à activer mon compte",
         "Je n'ai toujours pas accès au site",
-        "Je souhaite créer un compte VADF",
         "Mon compte n'est pas activé"
       ],
       "responses": [
@@ -162,6 +177,21 @@
       "description": "Gestion des erreurs ou incompréhensions.",
       "responses": [
         { "text": "Je n'ai pas bien compris votre demande. Pouvez-vous reformuler ou écrire directement à contact@vadf.fr ?", "conditions": ["intent_non_reconnue == true"] }
+      ]
+    },
+    "faq": {
+      "description": "Redirection vers la FAQ pour questions générales.",
+      "examples": [
+        "J'ai une question",
+        "Où trouver plus d'informations",
+        "FAQ",
+        "Aide"
+      ],
+      "responses": [
+        {
+          "text": "Pour toutes vos questions, je vous invite à consulter notre FAQ complète :\n\n👉 https://vadf.fr/pages/faq\n\nVous y trouverez des réponses détaillées sur nos produits, nos services et les modalités de commande.\n\nSi vous ne trouvez pas la réponse à votre question, n'hésitez pas à nous contacter à contact@vadf.fr",
+          "conditions": []
+        }
       ]
     }
   },
