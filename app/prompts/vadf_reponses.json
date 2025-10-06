@@ -1,9 +1,9 @@
 {
   "meta": {
-    "version": "1.0.0",
-    "lastUpdated": "2025-09-30",
+    "version": "1.1.0",
+    "lastUpdated": "2025-10-06",
     "author": "VADF",
-    "description": "Réponses-types VADF structurées par intention, avec variables, gestion d'erreur et contexte."
+    "description": "Réponses-types VADF avec ton professionnel et chaleureux, optimisées pour l'assistance client B2B."
   },
   "categories": {
     "compte": ["activation_compte", "mot_de_passe_oublie", "mise_a_jour_infos_entreprise"],
@@ -14,49 +14,83 @@
   "intents": {
     "activation_compte": {
       "description": "Activation ou réactivation d'un compte entreprise.",
+      "examples": [
+        "Je n'ai pas reçu l'e-mail d'activation de mon compte",
+        "Je n'arrive pas à activer mon compte",
+        "Je n'ai toujours pas accès au site",
+        "Je souhaite créer un compte VADF",
+        "Mon compte n'est pas activé"
+      ],
       "responses": [
         {
-          "text": "✅ Après vérification, votre compte entreprise est bien activé sur le site VADF.",
+          "text": "Après vérification, votre compte entreprise est bien activé sur le site VADF.",
           "conditions": ["compte_actif == true"]
         },
         {
-          "text": "📧 Je viens de renvoyer l'email d'activation à l'adresse {{email}}.",
+          "text": "Votre compte entreprise est associé à l'adresse e-mail {{email}}. Un nouvel e-mail d'activation vient de vous être envoyé.",
           "conditions": ["email_renvoye == true"],
           "variables": ["email"]
         },
         {
-          "text": "✉️ Vous recevrez un e-mail d'activation à l'adresse {{email}}, permettant de créer votre mot de passe.",
+          "text": "Vous allez recevoir un e-mail d'activation à l'adresse {{email}}. Il vous permettra de créer votre mot de passe et d'accéder à votre compte.",
           "conditions": ["nouveau_compte == true"],
           "variables": ["email"]
+        },
+        {
+          "text": "Un e-mail d'invitation au nouveau site VADF vous sera envoyé afin de finaliser la création de votre compte.",
+          "conditions": []
+        },
+        {
+          "text": "Une fois votre compte activé, vous pourrez vous connecter normalement à votre espace client.",
+          "conditions": []
         }
       ]
     },
     "mot_de_passe_oublie": {
       "description": "Réinitialisation du mot de passe.",
+      "examples": [
+        "Je ne reçois pas l'e-mail pour réinitialiser mon mot de passe",
+        "La fonction 'Mot de passe oublié' ne fonctionne pas",
+        "Mes identifiants ne sont pas reconnus",
+        "Je n'arrive plus à me connecter"
+      ],
       "responses": [
         {
-          "text": "Vous recevrez prochainement un e-mail pour réinitialiser votre mot de passe.",
+          "text": "Vous allez recevoir un e-mail vous permettant de réinitialiser votre mot de passe.",
           "conditions": ["reset_envoye == true"]
         },
         {
-          "text": "📥 Pensez à vérifier vos courriers indésirables ou spam.",
+          "text": "Pensez à vérifier vos courriers indésirables ou votre dossier spam si l'e-mail n'apparaît pas dans votre boîte de réception.",
           "conditions": []
         },
         {
-          "text": "💬 Je reste à votre disposition en cas de blocage.",
+          "text": "Je vous invite à vérifier également vos spams si vous ne trouvez pas l'e-mail de réinitialisation.",
+          "conditions": []
+        },
+        {
+          "text": "Je reste à votre disposition si le problème persiste.",
+          "conditions": []
+        },
+        {
+          "text": "N'hésitez pas à me confirmer si vous avez bien reçu l'e-mail ou à me signaler tout autre blocage.",
           "conditions": []
         }
       ]
     },
     "mise_a_jour_infos_entreprise": {
       "description": "Mise à jour des informations de l'entreprise.",
+      "examples": [
+        "Je souhaite changer mon adresse e-mail",
+        "Pouvez-vous mettre à jour mon compte entreprise ?",
+        "Modifier les coordonnées de ma société"
+      ],
       "responses": [
         {
-          "text": "✏️ Merci d'écrire à contact@vadf.fr pour mettre à jour vos coordonnées.",
+          "text": "Pour modifier l'adresse e-mail liée à votre compte entreprise, merci d'écrire à contact@vadf.fr. Nous mettrons à jour vos coordonnées dans les plus brefs délais.",
           "conditions": ["changement_email == true"]
         },
         {
-          "text": "Les coordonnées de l'entreprise {{nom_entreprise}} ont été mises à jour.",
+          "text": "Les coordonnées de l'entreprise {{nom_entreprise}} ont été mises à jour. Vous recevrez un e-mail de confirmation sous 24 heures.",
           "conditions": ["maj_effectuee == true"],
           "variables": ["nom_entreprise"]
         }
@@ -64,14 +98,15 @@
     },
     "escalade_support": {
       "description": "Escalade vers le support VADF.",
+      "examples": [
+        "Je n'arrive toujours pas à me connecter",
+        "Pouvez-vous m'aider ?",
+        "J'ai besoin d'assistance pour mon compte"
+      ],
       "responses": [
         {
-          "text": "📤 Votre demande a été transmise à contact@vadf.fr pour un traitement personnalisé.",
-          "conditions": ["escalade == true"]
-        },
-        {
-          "text": "Par e-mail\nSupport général : contact@vadf.fr",
-          "conditions": ["escalade == true"]
+          "text": "Merci de nous envoyer les coordonnées de votre entreprise par e-mail à contact@vadf.fr. Notre équipe support client prendra contact avec vous rapidement pour résoudre votre problème.",
+          "conditions": []
         }
       ]
     },
@@ -106,7 +141,7 @@
       "description": "Salutation d'accueil.",
       "responses": [
         {
-          "text": "Je suis chatbot VADF ! 👋\n\nJe suis là pour vous aider avec les questions concernant :\n\n- Nos produits et leurs caractéristiques\n- Les commandes et le processus d'achat\n- Tout autre aspect de notre service\n\nComment puis-je vous assister aujourd'hui ?",
+          "text": "Bonjour ! Je suis l'assistant virtuel VADF.\n\nJe peux vous aider pour :\n• Créer un compte professionnel\n• Activer votre compte professionnel\n• Découvrir nos produits et leurs caractéristiques\n• Commander des produits en stock\n• Mettre à jour les informations de votre entreprise\n• Réinitialiser votre mot de passe\n• Demander des produits en reliquat\n\nComment puis-je vous aider aujourd'hui ?",
           "conditions": []
         }
       ]
@@ -114,26 +149,26 @@
     "remerciement": {
       "description": "Remerciement.",
       "responses": [
-        { "text": "🙏 Merci pour votre message !", "conditions": [] }
+        { "text": "Avec plaisir ! N'hésitez pas si vous avez d'autres questions.", "conditions": [] }
       ]
     },
     "au_revoir": {
       "description": "Message de clôture.",
       "responses": [
-        { "text": "👋 Au revoir et à bientôt sur vadf.fr !", "conditions": [] }
+        { "text": "Au revoir et à bientôt sur vadf.fr !", "conditions": [] }
       ]
     },
     "erreur_generique": {
       "description": "Gestion des erreurs ou incompréhensions.",
       "responses": [
-        { "text": "❗ Je n'ai pas compris votre demande. Pouvez-vous reformuler ou écrire à contact@vadf.fr ?", "conditions": ["intent_non_reconnue == true"] }
+        { "text": "Je n'ai pas bien compris votre demande. Pouvez-vous reformuler ou écrire directement à contact@vadf.fr ?", "conditions": ["intent_non_reconnue == true"] }
       ]
     }
   },
   "common_phrases": {
-    "wait": "⏳ Un instant, je vérifie cela pour vous...",
-    "contact_support": "Pour toute demande complexe, contactez-nous à contact@vadf.fr.",
-    "error": "❗ Une erreur est survenue. Merci de réessayer ou d'écrire à contact@vadf.fr."
+    "wait": "Un instant, je vérifie cela pour vous...",
+    "contact_support": "Pour toute demande complexe, n'hésitez pas à nous contacter à contact@vadf.fr.",
+    "error": "Une erreur est survenue. Merci de réessayer ou d'écrire à contact@vadf.fr pour une assistance personnalisée."
   },
   "context": {
     "isFirstMessage": false,
