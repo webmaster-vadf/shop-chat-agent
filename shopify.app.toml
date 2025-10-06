@@ -6,6 +6,9 @@ application_url = "https://shop-chat-agent-bold-flower-713.fly.dev"
 embedded = true
 handle = "shop-chat-agent-1026"
 
+[build]
+automatically_update_urls_on_dev = true
+
 [webhooks]
 api_version = "2025-07"
 
@@ -22,6 +25,3 @@ redirect_urls = [
 
 [pos]
 embedded = false
-
-[build]
-automatically_update_urls_on_dev = true

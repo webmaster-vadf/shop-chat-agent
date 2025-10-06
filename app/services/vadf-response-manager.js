@@ -1,8 +1,7 @@
+// Import direct du JSON au lieu de fs.readFile
+import vadfReponsesJson from '../prompts/vadf_reponses.json';
 
-import fs from 'fs/promises';
-import path from 'path';
-
-const RESPONSES_PATH = path.resolve(process.cwd(), 'app/prompts/vadf_reponses.json');
+console.log('[VADF INIT] VADF responses imported successfully');
 
 class VADFResponseManager {
   constructor() {
@@ -12,9 +11,20 @@ class VADFResponseManager {
 
   async load() {
     if (!this.loaded) {
-      const data = await fs.readFile(RESPONSES_PATH, 'utf-8');
-      this.responses = JSON.parse(data);
-      this.loaded = true;
+      console.log('[VADF LOAD] Loading responses from imported JSON');
+      try {
+        // Utiliser le JSON importé directement
+        this.responses = vadfReponsesJson;
+        this.loaded = true;
+        console.log('[VADF LOAD] Successfully loaded responses');
+        console.log('[VADF LOAD] Available intents:', Object.keys(this.responses.intents));
+        console.log('[VADF LOAD] Salutation intent exists:', !!this.responses.intents.salutation);
+      } catch (error) {
+        console.error('[VADF LOAD] ERROR loading responses:', error);
+        throw error;
+      }
+    } else {
+      console.log('[VADF LOAD] Responses already loaded, skipping');
     }
   }
 
@@ -72,9 +82,14 @@ class VADFResponseManager {
   // Sélection intelligente de la meilleure réponse selon le contexte
   getResponse(intent, context = {}) {
     console.log('[VADF] getResponse called with intent:', intent, 'context:', context);
+    console.log('[VADF] this.responses loaded:', !!this.responses);
+    console.log('[VADF] this.responses.intents exists:', !!this.responses?.intents);
+    console.log('[VADF] Available intents:', this.responses?.intents ? Object.keys(this.responses.intents) : 'NONE');
+    console.log('[VADF] Intent "' + intent + '" exists:', !!this.responses?.intents?.[intent]);
 
     if (!this.responses || !this.responses.intents[intent]) {
       console.log('[VADF] Intent not found or responses not loaded');
+      console.log('[VADF] Returning error. this.responses:', !!this.responses, 'intent exists:', !!this.responses?.intents?.[intent]);
       return { text: this.responses?.common_phrases?.error || "Erreur interne.", type: "error" };
     }
 
