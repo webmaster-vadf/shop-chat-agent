@@ -224,10 +224,17 @@
     },
 
     sendMessage: function() {
+      console.log('📤 Sending message...');
+
       const { chatInput, messagesContainer } = this.elements;
       const message = chatInput.value.trim();
 
-      if (!message) return;
+      if (!message) {
+        console.log('⚠️ Empty message, aborting');
+        return;
+      }
+
+      console.log('💬 User message:', message);
 
       // Add user message to UI
       this.addMessageToUI('user', message);
