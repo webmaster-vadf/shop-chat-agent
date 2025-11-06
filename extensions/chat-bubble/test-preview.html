@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>VADF Support Modal - Test Preview</title>
+  <link rel="stylesheet" href="assets/chat.css">
+  <style>
+    /* Page de test simple */
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .test-container {
+      background: white;
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 600px;
+      text-align: center;
+    }
+
+    .test-container h1 {
+      color: #0C2E72;
+      margin-bottom: 20px;
+    }
+
+    .test-container p {
+      color: #666;
+      line-height: 1.6;
+      margin-bottom: 30px;
+    }
+
+    .test-info {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 12px;
+      margin-top: 30px;
+      text-align: left;
+    }
+
+    .test-info h3 {
+      color: #0C2E72;
+      margin-top: 0;
+    }
+
+    .test-info ul {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+
+    .test-info li {
+      margin: 8px 0;
+      color: #555;
+    }
+
+    .badge {
+      display: inline-block;
+      background: #0C2E72;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    .config-panel {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      margin-top: 20px;
+      border: 2px solid #0C2E72;
+    }
+
+    .config-panel h3 {
+      margin-top: 0;
+      color: #0C2E72;
+    }
+
+    .config-item {
+      margin: 15px 0;
+      text-align: left;
+    }
+
+    .config-item label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #333;
+    }
+
+    .config-item input[type="text"],
+    .config-item input[type="color"] {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .config-item input[type="color"] {
+      width: 60px;
+      height: 40px;
+      padding: 2px;
+      cursor: pointer;
+    }
+
+    .apply-btn {
+      background: #0C2E72;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 15px;
+      transition: background 0.2s;
+    }
+
+    .apply-btn:hover {
+      background: #0a2556;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="test-container">
+    <h1>🧪 Test de l'Interface VADF</h1>
+    <p>
+      Cette page vous permet de tester l'interface de support client VADF localement.<br>
+      <strong>Cliquez sur la bulle bleue en bas à droite</strong> pour ouvrir la modale de support.
+    </p>
+
+    <div class="config-panel">
+      <h3>⚙️ Configuration en temps réel</h3>
+      <div class="config-item">
+        <label for="logoUrl">URL du logo</label>
+        <input type="text" id="logoUrl" value="https://vadf.fr/cdn/shop/files/logo-vadf-blanc.png">
+      </div>
+      <div class="config-item">
+        <label for="welcomeMsg">Message d'accueil</label>
+        <input type="text" id="welcomeMsg" value="Bonjour, comment puis-je vous aider ?">
+      </div>
+      <div class="config-item">
+        <label for="bubbleColor">Couleur de la bulle</label>
+        <input type="color" id="bubbleColor" value="#0C2E72">
+      </div>
+      <div class="config-item">
+        <label for="headerColor">Couleur du header</label>
+        <input type="color" id="headerColor" value="#0C2E72">
+      </div>
+      <button class="apply-btn" onclick="applyConfig()">Appliquer les changements</button>
+    </div>
+
+    <div class="test-info">
+      <h3>✅ Fonctionnalités à tester :</h3>
+      <ul>
+        <li>
+          <strong>Bulle de chat</strong> <span class="badge">En bas à droite</span>
+          <br>Cliquez pour ouvrir la modale
+        </li>
+        <li>
+          <strong>Header bleu VADF</strong>
+          <br>Logo VADF + message d'accueil + bouton fermer
+        </li>
+        <li>
+          <strong>Carte "Envoyez-nous un message"</strong>
+          <br>Cliquez pour ouvrir le client email
+        </li>
+        <li>
+          <strong>4 liens FAQ</strong>
+          <br>Compte client, Produits, Fabrication, Reliquat
+        </li>
+        <li>
+          <strong>Responsive</strong>
+          <br>Redimensionnez la fenêtre pour tester le mode mobile
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Interface VADF Support Modal -->
+  <div class="shop-ai-chat-container">
+    <div class="shop-ai-chat-bubble" id="chatBubble" style="background-color: #0C2E72">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+    </div>
+
+    <div class="shop-ai-chat-window">
+      <!-- Header with VADF branding -->
+      <div class="shop-ai-chat-header" id="chatHeader" style="background-color: #0C2E72">
+        <div class="shop-ai-header-content">
+          <img src="https://vadf.fr/cdn/shop/files/logo-vadf-blanc.png" alt="Logo" class="shop-ai-logo" id="chatLogo" width="200" height="32" loading="lazy">
+          <button class="shop-ai-chat-close">✕</button>
+        </div>
+        <h2 class="shop-ai-welcome-text" id="welcomeText">Bonjour, comment puis-je vous aider ?</h2>
+      </div>
+
+      <!-- Support content -->
+      <div class="shop-ai-support-content">
+        <!-- Message card -->
+        <div class="shop-ai-message-card">
+          <svg class="shop-ai-message-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span class="shop-ai-message-card-text">Envoyez-nous un message</span>
+        </div>
+
+        <!-- FAQ Links -->
+        <div class="shop-ai-faq-links">
+          <a href="https://vadf.fr/pages/faq#compte-client" class="shop-ai-faq-link" target="_blank" rel="noopener">
+            <span>Compte client</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+          </a>
+          <a href="https://vadf.fr/pages/faq#produits" class="shop-ai-faq-link" target="_blank" rel="noopener">
+            <span>Produits</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+          </a>
+          <a href="https://vadf.fr/pages/faq#fabrication" class="shop-ai-faq-link" target="_blank" rel="noopener">
+            <span>Fabrication</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+          </a>
+          <a href="https://vadf.fr/pages/faq#reliquat" class="shop-ai-faq-link" target="_blank" rel="noopener">
+            <span>Reliquat</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/chat.js"></script>
+  <script>
+    // Configuration en temps réel
+    function applyConfig() {
+      const logoUrl = document.getElementById('logoUrl').value;
+      const welcomeMsg = document.getElementById('welcomeMsg').value;
+      const bubbleColor = document.getElementById('bubbleColor').value;
+      const headerColor = document.getElementById('headerColor').value;
+
+      // Appliquer les changements
+      document.getElementById('chatLogo').src = logoUrl;
+      document.getElementById('welcomeText').textContent = welcomeMsg;
+      document.getElementById('chatBubble').style.backgroundColor = bubbleColor;
+      document.getElementById('chatHeader').style.backgroundColor = headerColor;
+
+      // Mettre à jour les icônes avec la couleur du header
+      document.querySelectorAll('.shop-ai-message-icon, .shop-ai-faq-link svg').forEach(icon => {
+        icon.style.color = headerColor;
+      });
+
+      alert('✅ Configuration appliquée avec succès !');
+    }
+  </script>
+</body>
+</html>
