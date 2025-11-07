@@ -14,7 +14,6 @@
     init: function() {
       const container = document.querySelector('.shop-ai-chat-container');
       if (!container) {
-        console.error('❌ Container not found');
         return;
       }
 
@@ -64,7 +63,6 @@
       // Close modal when clicking close button
       if (closeButton) {
         closeButton.addEventListener('click', () => {
-          console.log('❌ Close button clicked');
           this.closeModal();
         });
       }
@@ -134,7 +132,6 @@
     openModal: function() {
       const { chatWindow } = this.elements;
       if (!chatWindow) {
-        console.error('❌ chatWindow not found in openModal');
         return;
       }
 
@@ -143,13 +140,10 @@
 
       if (this.isMobile) {
         document.body.classList.add('shop-ai-chat-open');
-        console.log('📱 Mobile body class added');
       }
     },
 
     closeModal: function() {
-      console.log('🚪 Closing modal');
-
       const { chatWindow } = this.elements;
       if (!chatWindow) return;
 
@@ -192,17 +186,12 @@
     },
 
     sendMessage: function() {
-      console.log('📤 Sending message...');
-
       const { chatInput, messagesContainer } = this.elements;
       const message = chatInput.value.trim();
 
       if (!message) {
-        console.log('⚠️ Empty message, aborting');
         return;
       }
-
-      console.log('💬 User message:', message);
 
       // Add user message to UI
       this.addMessageToUI('user', message);
@@ -304,7 +293,6 @@
         await this.handleStreamResponse(response);
 
       } catch (error) {
-        console.error('Error sending message:', error);
         this.removeTypingIndicator();
         this.addMessageToUI('assistant', "Désolé, une erreur s'est produite. Veuillez réessayer.");
       }
@@ -340,7 +328,6 @@
 
               try {
                 const event = JSON.parse(data);
-                console.log('📨 [FRONTEND] Received SSE event:', event.type);
 
                 if (event.type === 'content_block_delta') {
                   currentMessage += event.delta?.text || '';
@@ -350,17 +337,10 @@
                     currentMessage = '';
                   }
                 } else if (event.type === 'vadf_response') {
-                  console.log('📦 [FRONTEND] Received vadf_response event:', event);
-                  console.log('📝 [FRONTEND] Response text:', event.text);
-                  console.log('🔖 [FRONTEND] Intent:', event.vadf_intent);
-                  console.log('🏷️ [FRONTEND] Type:', event.vadf_type);
 
                   this.removeTypingIndicator();
                   if (event.text) {
-                    console.log('✅ [FRONTEND] Adding message to UI');
                     this.addMessageToUI('assistant', event.text);
-                  } else {
-                    console.log('⚠️ [FRONTEND] No text in vadf_response event');
                   }
                 } else if (event.type === 'product_results' && event.products) {
                   this.displayProductResults(event.products);
@@ -370,13 +350,9 @@
                 } else if (event.type === 'tool_use') {
                   this.addToolUseToUI(event);
                 } else if (event.type === 'end_turn') {
-                  console.log('🏁 [FRONTEND] Conversation turn ended');
                   this.removeTypingIndicator();
-                } else {
-                  console.log('❓ [FRONTEND] Unknown event type:', event.type);
-                }
+                } 
               } catch (e) {
-                console.error('Error parsing SSE data:', e);
               }
             }
           }
@@ -388,7 +364,6 @@
         }
 
       } catch (error) {
-        console.error('Error reading stream:', error);
         this.addMessageToUI('assistant', "Erreur lors de la réception de la réponse.");
       }
     },
@@ -453,11 +428,6 @@
       card.appendChild(infoDiv);
 
       return card;
-    },
-
-    addToolUseToUI: function(event) {
-      // Optional: Display tool usage for debugging
-      console.log('Tool used:', event.tool_name, event.input);
     },
 
     openAuthPopup: function(authUrl) {
