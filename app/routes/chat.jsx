@@ -181,30 +181,40 @@ async function handleChatSession({
 
     // --- INTÉGRATION VADF AVEC FALLBACK MCP ---
     if (promptType === 'vadfAssistant') {
+      console.log('🎯 [CHAT] VADF mode activated for message:', userMessage);
+
       // Utilisation du gestionnaire VADF asynchrone
       const vadfManager = await getVadfManager();
       const vadfIntent = vadfManager.detectIntent(userMessage);
 
+      console.log('🔍 [CHAT] Detected intent:', vadfIntent);
+
       // Si aucun intent VADF n'est détecté, basculer vers Claude + MCP
       if (!vadfIntent || vadfIntent === 'unknown') {
-        console.log('[SESSION] No specific VADF intent detected, falling back to Claude + MCP for:', vadfIntent);
+        console.log('⚠️ [CHAT] No specific VADF intent detected, falling back to Claude + MCP');
         // Ne pas retourner ici, laisser continuer vers le flux Claude
       } else {
         // Intent VADF spécifique détecté, traiter avec le système VADF
-        console.log('[SESSION] VADF intent detected:', vadfIntent);
+        console.log('✅ [CHAT] VADF intent detected:', vadfIntent);
 
         let vadfContext = vadfManager.enrichContext({
           isFirstMessage: conversationHistory.length <= 1
         });
+        console.log('📋 [CHAT] Initial context:', vadfContext);
 
         // Vérification du compte client si l'intention concerne le compte
         let accountCheckResult = null;
         let email;
         if (["activation_compte", "mot_de_passe_oublie", "mise_a_jour_infos_entreprise"].includes(vadfIntent)) {
+          console.log('👤 [CHAT] Account-related intent, checking customer account');
           // Extraction naïve de l'email depuis le message utilisateur (améliorable)
           const emailMatch = userMessage.match(/[\w.-]+@[\w.-]+\.[A-Za-z]{2,}/);
           email = emailMatch ? emailMatch[0] : undefined;
+          console.log('📧 [CHAT] Extracted email:', email || 'none');
+
           accountCheckResult = await checkVadfCustomerAccount({ email });
+          console.log('✅ [CHAT] Account check result:', accountCheckResult);
+
           // Adapter le contexte selon le statut du compte
           if (accountCheckResult.status === "active") {
             vadfContext = { ...vadfContext, compte_actif: true };
@@ -222,14 +232,22 @@ async function handleChatSession({
             statut_pro: accountCheckResult.status || undefined,
             telephone: accountCheckResult.telephone || undefined
           };
+          console.log('📝 [CHAT] Enriched context:', vadfContext);
         }
+
         let vadfResponse = vadfManager.getResponse(vadfIntent, vadfContext);
+        console.log('📤 [CHAT] Generated VADF response:', {
+          type: vadfResponse.type,
+          textPreview: vadfResponse.text?.substring(0, 100) + '...'
+        });
 
         // Si la vérification de compte a un message spécifique, on le priorise
         if (accountCheckResult && accountCheckResult.message) {
+          console.log('⚠️ [CHAT] Overriding with account check message');
           vadfResponse = { ...vadfResponse, text: accountCheckResult.message };
         }
 
+        console.log('📡 [CHAT] Sending SSE event: vadf_response');
         stream.sendMessage({
           type: 'vadf_response',
           text: vadfResponse.text,
@@ -239,6 +257,7 @@ async function handleChatSession({
 
         // Escalade automatique si utilisateur non pro
         if (accountCheckResult && accountCheckResult.status === 'not_pro') {
+          console.log('🚨 [CHAT] Non-professional user, sending escalade event');
           stream.sendMessage({
             type: 'escalade',
             contact: accountCheckResult.contact,
@@ -247,12 +266,15 @@ async function handleChatSession({
         }
         // Escalade intelligente : si besoin, notifier contact@vadf.fr
         if (vadfIntent === 'escalade_support' || vadfResponse.type === 'error') {
+          console.log('🚨 [CHAT] Support escalation needed');
           stream.sendMessage({
             type: 'escalade',
             contact: 'contact@vadf.fr',
             message: vadfManager.getCommonPhrase('contact_support')
           });
         }
+
+        console.log('✅ [CHAT] VADF response complete, sending end_turn');
         stream.sendMessage({ type: 'end_turn' });
         return;
       }

@@ -190,24 +190,32 @@ MCP endpoints are hit directly via `fetch()` with JSON-RPC payloads (see `_makeJ
 
 When `promptType: 'vadfAssistant'`, the system uses hybrid intent detection with MCP fallback:
 - **VADF-specific intents** (handled by rule-based system):
-  - Account management: `activation_compte`, `mot_de_passe_oublie`, `mise_a_jour_infos_entreprise`
-  - Support: `escalade_support`
-  - Product info: `origine_produit`, `personnalisation`, `b2b_only`
+  - Account management (4 intents): `creation_compte`, `activation_compte`, `mot_de_passe_oublie`, `mise_a_jour_infos_entreprise`
+  - Support (2 intents): `escalade_support`, `faq`
+  - Product info (9 intents): `origine_produit`, `materiaux`, `personnalisation`, `b2b_only`, `reliquat`, `stock_indisponible`, `devis`, `tarifs`, `fiches_techniques`
+  - General (3 intents): `salutation`, `remerciement`, `au_revoir`
+  - Total: 17 intents with conditional responses and variable replacement support
   - Checks customer account status via `vadf-customer-account.server.js`
   - Returns templated responses from `app/prompts/vadf_reponses.json`
   - Triggers support escalation for non-professional accounts
 
 - **MCP fallback** (product search, cart, orders):
-  - Generic queries: `unknown`, `salutation`, `remerciement`, `au_revoir`
-  - Product keywords: "produit", "cherche", "prix", "stock", "commander", "panier"
-  - Automatically switches to Claude + MCP Storefront tools
+  - Generic queries when intent is `unknown`
+  - Product keywords trigger automatic switch to Claude + MCP: "produit", "cherche", "prix", "stock", "commander", "panier", "cart", "commande"
   - Uses system prompt from `prompts.json` with VADF branding
+  - Full access to Storefront and Customer MCP tools
 
 **Intent Detection Flow:**
 1. Check if message contains product keywords → MCP
-2. Check for VADF-specific account/support keywords → VADF responses
-3. Check for generic greetings/thanks → MCP
-4. Default → MCP
+2. Check for VADF-specific account/support keywords (17 intents) → VADF responses
+3. Check for generic greetings/thanks → MCP (treated as fallback)
+4. Default (`unknown` intent) → MCP
+
+**Response Selection:**
+- Responses in `vadf_reponses.json` support conditional logic via `conditions` array
+- Variable replacement with `{{variable}}` syntax (e.g., `{{email}}`, `{{nom_entreprise}}`)
+- Context enrichment from customer account checks
+- Override mechanism: `accountCheckResult.message` can override JSON responses if needed
 
 This hybrid mode provides deterministic responses for account management while leveraging AI for product discovery.
 
@@ -288,3 +296,19 @@ Ensure the `application_url` in `shopify.app.toml` matches your production domai
 **Storefront UI:**
 - [extensions/chat-bubble/blocks/chat-interface.liquid](extensions/chat-bubble/blocks/chat-interface.liquid): Theme extension UI
 - [extensions/chat-bubble/assets/chat.js](extensions/chat-bubble/assets/chat.js): Frontend logic
+- [extensions/chat-bubble/assets/chat.css](extensions/chat-bubble/assets/chat.css): Styling
+
+**Frontend SSE Event Types:**
+The frontend (`chat.js`) handles the following Server-Sent Event types from the backend:
+- `id`: Initial conversation ID
+- `chunk`: Text delta for streaming responses
+- `content_block_delta`: Alternative streaming format with `delta.text`
+- `message_complete`: Message finished streaming
+- `message_stop`: Alternative message completion event
+- `tool_use`: Tool invocation notification (for debugging)
+- `vadf_response`: VADF intent-based response with `text`, `vadf_intent`, and `vadf_type`
+- `product_results`: Array of products to display with `products[]` containing `{title, price, url, image}`
+- `auth_required`: Customer authentication needed with `auth_url` and `message`
+- `escalade`: Support escalation notification with `contact` and `message`
+- `end_turn`: Conversation turn complete
+- `[DONE]`: Stream termination signal

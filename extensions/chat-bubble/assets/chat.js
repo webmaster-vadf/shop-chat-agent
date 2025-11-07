@@ -340,6 +340,7 @@
 
               try {
                 const event = JSON.parse(data);
+                console.log('📨 [FRONTEND] Received SSE event:', event.type);
 
                 if (event.type === 'content_block_delta') {
                   currentMessage += event.delta?.text || '';
@@ -348,6 +349,19 @@
                     this.addMessageToUI('assistant', currentMessage);
                     currentMessage = '';
                   }
+                } else if (event.type === 'vadf_response') {
+                  console.log('📦 [FRONTEND] Received vadf_response event:', event);
+                  console.log('📝 [FRONTEND] Response text:', event.text);
+                  console.log('🔖 [FRONTEND] Intent:', event.vadf_intent);
+                  console.log('🏷️ [FRONTEND] Type:', event.vadf_type);
+
+                  this.removeTypingIndicator();
+                  if (event.text) {
+                    console.log('✅ [FRONTEND] Adding message to UI');
+                    this.addMessageToUI('assistant', event.text);
+                  } else {
+                    console.log('⚠️ [FRONTEND] No text in vadf_response event');
+                  }
                 } else if (event.type === 'product_results' && event.products) {
                   this.displayProductResults(event.products);
                 } else if (event.type === 'auth_required' && event.auth_url) {
@@ -355,6 +369,11 @@
                   this.addMessageToUI('assistant', event.message);
                 } else if (event.type === 'tool_use') {
                   this.addToolUseToUI(event);
+                } else if (event.type === 'end_turn') {
+                  console.log('🏁 [FRONTEND] Conversation turn ended');
+                  this.removeTypingIndicator();
+                } else {
+                  console.log('❓ [FRONTEND] Unknown event type:', event.type);
                 }
               } catch (e) {
                 console.error('Error parsing SSE data:', e);

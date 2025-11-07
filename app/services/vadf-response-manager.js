@@ -33,6 +33,8 @@ class VADFResponseManager {
     const msg = message.toLowerCase();
     const intents = Object.keys(this.responses.intents);
 
+    console.log('🔍 [VADF] Detecting intent for message:', message);
+
     // Mapping simple mots-clés -> intention
     // Intents spécifiques VADF (gestion de compte, support)
     const specificMapping = {
@@ -59,13 +61,14 @@ class VADFResponseManager {
 
     // Chercher d'abord les mots-clés produit = fallback MCP
     if (productKeywords.some(k => msg.includes(k))) {
-      console.log('[VADF] Product-related query detected, fallback to MCP');
+      console.log('✅ [VADF] Product keyword detected, returning "unknown" for MCP fallback');
       return "unknown"; // Force fallback vers MCP Storefront
     }
 
     // Chercher ensuite les intents spécifiques VADF
     for (const [intent, keywords] of Object.entries(specificMapping)) {
       if (keywords.some(k => msg.includes(k))) {
+        console.log(`✅ [VADF] Specific intent detected: "${intent}"`);
         return intent;
       }
     }
@@ -73,11 +76,13 @@ class VADFResponseManager {
     // Si intent générique détecté, retourner le nom de l'intent (géré dans chat.jsx)
     for (const [intent, keywords] of Object.entries(genericMapping)) {
       if (keywords.some(k => msg.includes(k))) {
+        console.log(`✅ [VADF] Generic intent detected: "${intent}"`);
         return intent; // Retourne 'salutation', 'remerciement', 'au_revoir'
       }
     }
 
     // Aucun intent détecté = fallback vers MCP
+    console.log('⚠️ [VADF] No intent detected, returning "unknown" for MCP fallback');
     return "unknown";
   }
 
