@@ -36,17 +36,28 @@ class VADFResponseManager {
     console.log('🔍 [VADF] Detecting intent for message:', message);
 
     // Mapping simple mots-clés -> intention
-    // Intents spécifiques VADF (gestion de compte, support)
+    // Intents spécifiques VADF (gestion de compte, support, produits)
     const specificMapping = {
+      // Compte (4 intents)
       creation_compte: ["créer un compte", "créer compte", "ouvrir un compte", "inscription", "s'inscrire", "nouveau compte"],
-      activation_compte: ["activer", "activation", "compte pas activé", "accès au site"],
+      activation_compte: ["activer", "activation", "compte pas activé", "accès au site", "activer votre compte", "activer mon compte"],
       mot_de_passe_oublie: ["mot de passe", "oublié", "reset", "réinitialiser"],
       mise_a_jour_infos_entreprise: ["mettre à jour", "modifier", "email", "coordonnées", "changement"],
+
+      // Support (2 intents)
       escalade_support: ["problème complexe", "support technique", "bloqué", "bug"],
-      origine_produit: ["origine", "fabriqué", "provenance", "made in"],
+      faq: ["faq", "aide", "question", "informations"],
+
+      // Produits (9 intents)
+      origine_produit: ["origine", "fabriqué", "provenance", "made in", "fabrication"],
+      materiaux: ["matériaux", "tissus", "matières", "d'où viennent", "tissus locaux"],
       personnalisation: ["personnaliser", "personnalisation", "broderie", "sérigraphie", "impression"],
-      b2b_only: ["b2b", "particulier", "professionnel", "entreprise"],
-      faq: ["faq", "aide", "question", "informations"]
+      b2b_only: ["b2b", "particulier", "professionnel", "entreprise", "qui peut commander"],
+      reliquat: ["reliquat", "réapprovisionnement", "rupture"],
+      stock_indisponible: ["indisponible", "non disponible", "quand disponible"],
+      devis: ["devis", "prix mesure", "devis personnalisé"],
+      tarifs: ["voir tarifs", "voir prix", "tarifs produits", "prix articles"],
+      fiches_techniques: ["fiche technique", "photos produits", "documentation", "caractéristiques"]
     };
 
     // Intents génériques (à renvoyer vers MCP si détectés)
