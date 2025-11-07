@@ -214,21 +214,27 @@ async function handleChatSession({
 
     // --- INTÉGRATION VADF AVEC FALLBACK MCP ---
     if (promptType === 'vadfAssistant') {
-      console.log('🎯 [CHAT] VADF mode activated for message:', userMessage);
+      console.log('════════════════════════════════════════════════════════');
+      console.log('🎯 [CHAT] VADF MODE ACTIVATED');
+      console.log('📝 [CHAT] User message:', userMessage);
+      console.log('════════════════════════════════════════════════════════');
 
       // Utilisation du gestionnaire VADF asynchrone
       const vadfManager = await getVadfManager();
-      const vadfIntent = vadfManager.detectIntent(userMessage);
+      console.log('✅ [CHAT] VADF Manager loaded');
 
-      console.log('🔍 [CHAT] Detected intent:', vadfIntent);
+      const vadfIntent = vadfManager.detectIntent(userMessage);
+      console.log('🔍 [CHAT] Intent detection result:', vadfIntent);
 
       // Si aucun intent VADF n'est détecté, basculer vers Claude + MCP
       if (!vadfIntent || vadfIntent === 'unknown') {
         console.log('⚠️ [CHAT] No specific VADF intent detected, falling back to Claude + MCP');
+        console.log('════════════════════════════════════════════════════════');
         // Ne pas retourner ici, laisser continuer vers le flux Claude
       } else {
         // Intent VADF spécifique détecté, traiter avec le système VADF
-        console.log('✅ [CHAT] VADF intent detected:', vadfIntent);
+        console.log('✅ [CHAT] VADF-specific intent detected:', vadfIntent);
+        console.log('════════════════════════════════════════════════════════');
 
         let vadfContext = vadfManager.enrichContext({
           isFirstMessage: conversationHistory.length <= 1
@@ -239,25 +245,41 @@ async function handleChatSession({
         let accountCheckResult = null;
         let email;
         if (["activation_compte", "mot_de_passe_oublie", "mise_a_jour_infos_entreprise"].includes(vadfIntent)) {
-          console.log('👤 [CHAT] Account-related intent, checking customer account');
+          console.log('👤 [CHAT] Account-related intent detected:', vadfIntent);
+          console.log('📝 [CHAT] User message:', userMessage);
+
           // Extraction naïve de l'email depuis le message utilisateur (améliorable)
           const emailMatch = userMessage.match(/[\w.-]+@[\w.-]+\.[A-Za-z]{2,}/);
           email = emailMatch ? emailMatch[0] : undefined;
+          console.log('📧 [CHAT] Email extraction attempt - Match found:', !!emailMatch);
           console.log('📧 [CHAT] Extracted email:', email || 'none');
 
-          accountCheckResult = await checkVadfCustomerAccount({ email });
-          console.log('✅ [CHAT] Account check result:', accountCheckResult);
+          // Ne vérifier le compte que si un email est trouvé dans le message
+          if (email) {
+            console.log('✅ [CHAT] Email found, calling checkVadfCustomerAccount with:', { email });
+            accountCheckResult = await checkVadfCustomerAccount({ email });
+            console.log('✅ [CHAT] Account check completed');
+            console.log('✅ [CHAT] Account check result:', JSON.stringify(accountCheckResult, null, 2));
+          } else {
+            console.log('⚠️ [CHAT] No email found in message, skipping account check');
+            console.log('⚠️ [CHAT] Will use default VADF response without account override');
+          }
 
           // Adapter le contexte selon le statut du compte
-          if (accountCheckResult.status === "active") {
+          if (accountCheckResult && accountCheckResult.status === "active") {
+            console.log('🟢 [CHAT] Account status is ACTIVE, setting compte_actif = true');
             vadfContext = { ...vadfContext, compte_actif: true };
-          } else if (accountCheckResult.status === "inactive") {
+          } else if (accountCheckResult && accountCheckResult.status === "inactive") {
+            console.log('🟡 [CHAT] Account status is INACTIVE, setting compte_actif = false');
             vadfContext = { ...vadfContext, compte_actif: false };
+          } else {
+            console.log('⚪ [CHAT] Account status is neither active nor inactive:', accountCheckResult?.status || 'null');
           }
         }
 
         // Enrichir le contexte client avec des infos supplémentaires si disponibles
         if (accountCheckResult) {
+          console.log('🔄 [CHAT] Enriching context with account check result');
           vadfContext = {
             ...vadfContext,
             email: email,
@@ -265,22 +287,44 @@ async function handleChatSession({
             statut_pro: accountCheckResult.status || undefined,
             telephone: accountCheckResult.telephone || undefined
           };
-          console.log('📝 [CHAT] Enriched context:', vadfContext);
+          console.log('📝 [CHAT] Enriched context:', JSON.stringify(vadfContext, null, 2));
+        } else {
+          console.log('📝 [CHAT] Using base context (no account check result to enrich)');
         }
 
-        let vadfResponse = vadfManager.getResponse(vadfIntent, vadfContext);
-        console.log('📤 [CHAT] Generated VADF response:', {
-          type: vadfResponse.type,
-          textPreview: vadfResponse.text?.substring(0, 100) + '...'
+        console.log('🎯 [CHAT] Calling vadfManager.getResponse with:', {
+          intent: vadfIntent,
+          context: vadfContext
         });
 
+        let vadfResponse = vadfManager.getResponse(vadfIntent, vadfContext);
+        console.log('📤 [CHAT] Generated VADF response:');
+        console.log('   - Type:', vadfResponse.type);
+        console.log('   - Text preview:', vadfResponse.text?.substring(0, 100) + '...');
+        console.log('   - Full text length:', vadfResponse.text?.length);
+
         // Si la vérification de compte a un message spécifique, on le priorise
+        console.log('🔍 [CHAT] Checking if account message should override VADF response');
+        console.log('   - accountCheckResult exists:', !!accountCheckResult);
+        console.log('   - accountCheckResult.message exists:', !!accountCheckResult?.message);
+
         if (accountCheckResult && accountCheckResult.message) {
-          console.log('⚠️ [CHAT] Overriding with account check message');
+          console.log('⚠️ [CHAT] OVERRIDE: Using account check message instead of VADF response');
+          console.log('   - Original VADF text:', vadfResponse.text?.substring(0, 80));
+          console.log('   - Override text:', accountCheckResult.message?.substring(0, 80));
           vadfResponse = { ...vadfResponse, text: accountCheckResult.message };
+        } else {
+          console.log('✅ [CHAT] NO OVERRIDE: Using VADF response as-is');
         }
 
-        console.log('📡 [CHAT] Sending SSE event: vadf_response');
+        console.log('════════════════════════════════════════════════════════');
+        console.log('📡 [CHAT] SENDING FINAL RESPONSE TO CLIENT');
+        console.log('   - Event type: vadf_response');
+        console.log('   - Intent:', vadfIntent);
+        console.log('   - Response type:', vadfResponse.type);
+        console.log('   - Response text:', vadfResponse.text);
+        console.log('════════════════════════════════════════════════════════');
+
         stream.sendMessage({
           type: 'vadf_response',
           text: vadfResponse.text,
