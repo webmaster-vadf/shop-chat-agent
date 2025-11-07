@@ -16,6 +16,17 @@ export function createStreamManager(encoder, controller) {
    */
   const sendMessage = (data) => {
     try {
+      // Log SSE event being sent (with truncation for large payloads)
+      const logData = { ...data };
+      if (logData.chunk && logData.chunk.length > 100) {
+        logData.chunk = logData.chunk.substring(0, 100) + '...';
+      }
+      if (logData.text && logData.text.length > 200) {
+        logData.textPreview = logData.text.substring(0, 200) + '...';
+        delete logData.text;
+      }
+      console.log('📡 [SSE] Sending event:', JSON.stringify(logData));
+
       const text = `data: ${JSON.stringify(data)}\n\n`;
       controller.enqueue(encoder.encode(text));
     } catch (error) {

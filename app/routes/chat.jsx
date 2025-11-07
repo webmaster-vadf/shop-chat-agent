@@ -76,10 +76,14 @@ async function handleChatRequest(request) {
   try {
     // Get message data from request body
     const body = await request.json();
+    console.log('📨 [CHAT] Received request body:', JSON.stringify(body));
+
     const userMessage = body.message;
+    console.log('💬 [CHAT] User message:', userMessage);
 
     // Validate required message
     if (!userMessage) {
+      console.log('❌ [CHAT] Missing message in request');
       return new Response(
         JSON.stringify({ error: AppConfig.errorMessages.missingMessage }),
         { status: 400, headers: getSseHeaders(request) }
@@ -89,6 +93,11 @@ async function handleChatRequest(request) {
     // Generate or use existing conversation ID
     const conversationId = body.conversation_id || Date.now().toString();
     const promptType = body.prompt_type || AppConfig.api.defaultPromptType;
+
+    console.log('🆔 [CHAT] Conversation ID:', conversationId);
+    console.log('⚙️ [CHAT] Prompt type:', promptType);
+    console.log('🔐 [CHAT] Shop ID:', request.headers.get("X-Shopify-Shop-Id"));
+    console.log('🌐 [CHAT] Origin:', request.headers.get("Origin"));
 
     // Create a stream for the response
     const responseStream = createSseStream(async (stream) => {
@@ -129,6 +138,11 @@ async function handleChatSession({
   promptType,
   stream
 }) {
+  console.log('🚀 [SESSION] Starting chat session');
+  console.log('🆔 [SESSION] Conversation ID:', conversationId);
+  console.log('💬 [SESSION] User message:', userMessage);
+  console.log('⚙️ [SESSION] Prompt type:', promptType);
+
   // Initialize services
   const claudeService = createClaudeService();
   const toolService = createToolService();
@@ -136,7 +150,12 @@ async function handleChatSession({
   // Initialize MCP client
   const shopId = request.headers.get("X-Shopify-Shop-Id");
   const shopDomain = request.headers.get("Origin");
+  console.log('🏪 [SESSION] Shop domain:', shopDomain);
+  console.log('🔑 [SESSION] Shop ID:', shopId);
+
   const customerMcpEndpoint = await getCustomerMcpEndpoint(shopDomain, conversationId);
+  console.log('🔗 [SESSION] Customer MCP endpoint:', customerMcpEndpoint);
+
   const mcpClient = new MCPClient(
     shopDomain,
     conversationId,
@@ -147,6 +166,7 @@ async function handleChatSession({
   try {
     // Send conversation ID to client
     stream.sendMessage({ type: 'id', conversation_id: conversationId });
+    console.log('📤 [SESSION] Sent conversation ID to client');
 
     // Connect to MCP servers and get available tools
     let storefrontMcpTools = [], customerMcpTools = [];
@@ -164,8 +184,13 @@ async function handleChatSession({
     let productsToDisplay = [];
 
     // Sauvegarder le message utilisateur
+    console.log('💾 [SESSION] Saving user message to database');
     await saveMessage(conversationId, 'user', userMessage);
+
+    console.log('📚 [SESSION] Loading conversation history from database');
     const dbMessages = await getConversationHistory(conversationId);
+    console.log('📊 [SESSION] Total messages in history:', dbMessages.length);
+
     conversationHistory = dbMessages.map(dbMessage => {
       let content;
       try {
@@ -178,6 +203,14 @@ async function handleChatSession({
         content
       };
     });
+
+    console.log('📝 [SESSION] Parsed conversation history:', conversationHistory.length, 'messages');
+    if (conversationHistory.length > 0) {
+      console.log('📜 [SESSION] Last 3 messages:', JSON.stringify(conversationHistory.slice(-3).map(m => ({
+        role: m.role,
+        contentPreview: typeof m.content === 'string' ? m.content.substring(0, 100) : '[Object]'
+      }))));
+    }
 
     // --- INTÉGRATION VADF AVEC FALLBACK MCP ---
     if (promptType === 'vadfAssistant') {

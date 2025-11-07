@@ -38,8 +38,8 @@
       ],
       "responses": [
         {
-          "text": "Après vérification, votre compte entreprise est bien activé sur le site VADF.",
-          "conditions": ["compte_actif == true"]
+          "text": "Merci d’écrire à support@vadf.fr en indiquant le nom de votre entreprise, ainsi que l’adresse e-mail ou le numéro de téléphone associé à votre compte. Cela nous permettra de vérifier si votre compte est bien enregistré en tant que client professionnel sur notre site.",
+          "conditions": []
         },
         {
           "text": "Votre compte entreprise est associé à l'adresse e-mail {{email}}. Un nouvel e-mail d'activation vient de vous être envoyé.",
@@ -156,8 +156,8 @@
       "description": "Salutation d'accueil.",
       "responses": [
         {
-          "text": "Bonjour ! Je suis l'assistant virtuel VADF.\n\nJe peux vous aider pour :\n• Créer un compte professionnel\n• Activer votre compte professionnel\n• Découvrir nos produits et leurs caractéristiques\n• Commander des produits en stock\n• Mettre à jour les informations de votre entreprise\n• Réinitialiser votre mot de passe\n• Demander des produits en reliquat\n\nComment puis-je vous aider aujourd'hui ?",
-          "conditions": []
+        "text": "\n•Créer un compte professionnel\n• Activer votre compte professionnel\n• Mettre à jour les informations de votre entreprise\n• Réinitialiser votre mot de passe\n• Découvrir nos produits et leurs caractéristiques\n• Commander des produits en stock\n• Demander des produits en reliquat\n\nComment puis-je vous aider aujourd'hui ?",
+        "conditions": []
         }
       ]
     },
