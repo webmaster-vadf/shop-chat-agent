@@ -12,15 +12,11 @@
     currentView: 'menu', // 'menu' or 'chat'
 
     init: function() {
-      console.log('🚀 VADF Chat initialized');
-
       const container = document.querySelector('.shop-ai-chat-container');
       if (!container) {
         console.error('❌ Container not found');
         return;
       }
-
-      console.log('✅ Container found:', container);
 
       // Cache DOM elements
       this.elements = {
@@ -37,17 +33,8 @@
         sendButton: container.querySelector('.shop-ai-chat-send')
       };
 
-      console.log('📦 Elements cached:', {
-        chatBubble: !!this.elements.chatBubble,
-        chatWindow: !!this.elements.chatWindow,
-        supportMenu: !!this.elements.supportMenu,
-        chatView: !!this.elements.chatView,
-        openChatBtn: !!this.elements.openChatBtn
-      });
-
       // Detect mobile device
       this.isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      console.log('📱 Mobile detected:', this.isMobile);
 
       // Set up event listeners
       this.setupEventListeners();
@@ -59,12 +46,9 @@
 
       // Generate unique conversation ID
       this.conversationId = this.generateConversationId();
-      console.log('🆔 Conversation ID:', this.conversationId);
     },
 
     setupEventListeners: function() {
-      console.log('🎧 Setting up event listeners');
-
       const {
         chatBubble, closeButton, openChatBtn, backToMenuBtn,
         chatInput, sendButton
@@ -73,7 +57,6 @@
       // Toggle modal when clicking bubble
       if (chatBubble) {
         chatBubble.addEventListener('click', () => {
-          console.log('🔵 Bubble clicked!');
           this.openModal();
         });
       }
@@ -89,7 +72,6 @@
       // Open chat view from menu
       if (openChatBtn) {
         openChatBtn.addEventListener('click', () => {
-          console.log('💬 "Envoyez-nous un message" clicked');
           this.switchToChat();
         });
       }
@@ -97,7 +79,6 @@
       // Back to menu from chat
       if (backToMenuBtn) {
         backToMenuBtn.addEventListener('click', () => {
-          console.log('⬅️ Back to menu clicked');
           this.switchToMenu();
         });
       }
@@ -136,8 +117,6 @@
           }
         }
       });
-
-      console.log('✅ Event listeners attached');
     },
 
     setupMobileViewport: function() {
@@ -153,8 +132,6 @@
     },
 
     openModal: function() {
-      console.log('📂 Opening modal, switching to menu view');
-
       const { chatWindow } = this.elements;
       if (!chatWindow) {
         console.error('❌ chatWindow not found in openModal');
@@ -162,8 +139,6 @@
       }
 
       chatWindow.classList.add('active');
-      console.log('✅ Modal active class added');
-
       this.switchToMenu(); // Always show menu first
 
       if (this.isMobile) {
@@ -185,14 +160,11 @@
     },
 
     switchToChat: function() {
-      console.log('💬 Switching to chat view');
-
       const { supportMenu, chatView, chatInput, messagesContainer } = this.elements;
 
       supportMenu.style.display = 'none';
       chatView.style.display = 'flex';
       this.currentView = 'chat';
-      console.log('✅ Chat view displayed');
 
       // Focus input
       setTimeout(() => {
@@ -201,20 +173,16 @@
 
       // Show welcome message if first time
       if (!messagesContainer || messagesContainer.children.length === 0) {
-        console.log('👋 Adding welcome message');
         this.addWelcomeMessage();
       }
     },
 
     switchToMenu: function() {
-      console.log('📋 Switching to menu view');
-
       const { supportMenu, chatView } = this.elements;
 
       chatView.style.display = 'none';
       supportMenu.style.display = 'flex';
       this.currentView = 'menu';
-      console.log('✅ Menu view displayed');
     },
 
     addWelcomeMessage: function() {
