@@ -97,17 +97,14 @@
       "examples": [
         "Je souhaite changer mon adresse e-mail",
         "Pouvez-vous mettre à jour mon compte entreprise ?",
-        "Modifier les coordonnées de ma société"
+        "Modifier les coordonnées de ma société",
+        "Mettre à jour les informations de votre entreprise",
+        "Changer mes informations entreprise"
       ],
       "responses": [
         {
-          "text": "Pour modifier l'adresse e-mail liée à votre compte entreprise, merci d'écrire à contact@vadf.fr. Nous mettrons à jour vos coordonnées dans les plus brefs délais.",
-          "conditions": ["changement_email == true"]
-        },
-        {
-          "text": "Les coordonnées de l'entreprise {{nom_entreprise}} ont été mises à jour. Vous recevrez un e-mail de confirmation sous 24 heures.",
-          "conditions": ["maj_effectuee == true"],
-          "variables": ["nom_entreprise"]
+          "text": "Connectez-vous à votre espace client et cliquez sur Mon compte. Vous pouvez modifier :\n– votre mot de passe\n– vos adresses de livraison.\n\nPour mettre à jour les informations liées à votre entreprise, contactez directement votre interlocuteur VADF : support@vadf.fr",
+          "conditions": []
         }
       ]
     },
