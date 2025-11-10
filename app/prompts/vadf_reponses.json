@@ -70,11 +70,12 @@
         "Je n'arrive plus à me connecter",
         "Réinitialiser mon mot de passe",
         "Changer mon mot de passe",
-        "Modifier mon mot de passe"
+        "Modifier mon mot de passe",
+        "Mot de passe oublié"
       ],
       "responses": [
         {
-          "text": "Connectez-vous à votre espace client et cliquez sur Mon compte. Vous pouvez modifier :\n– votre mot de passe\n– vos adresses de livraison.\n\nPour mettre à jour les informations liées à votre entreprise, contactez directement votre interlocuteur VADF : support@vadf.fr",
+          "text": "Si vous souhaitez réinitialiser votre mot de passe, veuillez suivre ces étapes :\n\n1️⃣ Rendez-vous à l'adresse suivante : https://vadf.fr/account/login#recover\n2️⃣ Cliquez sur le lien \"Mot de passe oublié ?\"\n3️⃣ Saisissez l'adresse e-mail associée à votre compte d'entreprise\n4️⃣ Un email sera automatiquement envoyé à cette adresse pour réinitialiser votre mot de passe\n\nPensez à vérifier vos courriers indésirables si vous ne recevez pas l'e-mail.",
           "conditions": []
         }
       ]
