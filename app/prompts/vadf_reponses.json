@@ -67,27 +67,14 @@
         "Je ne reçois pas l'e-mail pour réinitialiser mon mot de passe",
         "La fonction 'Mot de passe oublié' ne fonctionne pas",
         "Mes identifiants ne sont pas reconnus",
-        "Je n'arrive plus à me connecter"
+        "Je n'arrive plus à me connecter",
+        "Réinitialiser mon mot de passe",
+        "Changer mon mot de passe",
+        "Modifier mon mot de passe"
       ],
       "responses": [
         {
-          "text": "Vous allez recevoir un e-mail vous permettant de réinitialiser votre mot de passe.",
-          "conditions": ["reset_envoye == true"]
-        },
-        {
-          "text": "Pensez à vérifier vos courriers indésirables ou votre dossier spam si l'e-mail n'apparaît pas dans votre boîte de réception.",
-          "conditions": []
-        },
-        {
-          "text": "Je vous invite à vérifier également vos spams si vous ne trouvez pas l'e-mail de réinitialisation.",
-          "conditions": []
-        },
-        {
-          "text": "Je reste à votre disposition si le problème persiste.",
-          "conditions": []
-        },
-        {
-          "text": "N'hésitez pas à me confirmer si vous avez bien reçu l'e-mail ou à me signaler tout autre blocage.",
+          "text": "Connectez-vous à votre espace client et cliquez sur Mon compte. Vous pouvez modifier :\n– votre mot de passe\n– vos adresses de livraison.\n\nPour mettre à jour les informations liées à votre entreprise, contactez directement votre interlocuteur VADF : support@vadf.fr",
           "conditions": []
         }
       ]
