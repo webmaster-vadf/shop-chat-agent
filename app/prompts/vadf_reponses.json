@@ -162,11 +162,12 @@
         "Quels produits proposez-vous",
         "Voir le catalogue",
         "Produits disponibles",
-        "Que vendez-vous"
+        "Que vendez-vous",
+        "Découvrir nos produits et leurs caractéristiques"
       ],
       "responses": [
         {
-          "text": "Une fois connecté à votre compte professionnel, vous aurez accès à :\n\n📋 Les tarifs au bas des fiches produits\n📄 Les fiches techniques détaillées\n🎨 Les guides d'impression\n🖼️ Les visuels haute résolution\n\nNos vêtements sont fabriqués en France à partir de matières recyclées et biologiques.\n\nConnectez-vous pour découvrir notre catalogue complet : https://vadf.fr/account/login",
+          "text": "Une fois connecté à votre compte entreprise, vous pouvez consulter directement sur la page produit la fiche technique, le guide d'impression ainsi que les visuels disponibles.\n\nPour en savoir plus, vous pouvez consulter notre Blog VADF.\n\n👉 Connectez-vous : https://vadf.fr/account/login",
           "conditions": []
         }
       ]
