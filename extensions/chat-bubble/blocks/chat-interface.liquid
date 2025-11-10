@@ -19,7 +19,7 @@
         {% endif %}
         <button class="shop-ai-chat-close">✕</button>
       </div>
-      <h2 class="shop-ai-welcome-text">{{ block.settings.welcome_message }}</h2>
+      <h2 class="shop-ai-welcome-text">{{ block.settings.welcome_message | default: "Je suis l'assistant VADF, là pour vous guider et vous accompagner dans vos démarches." }}</h2>
     </div>
 
     <!-- Support Menu View -->
@@ -149,7 +149,7 @@
       "type": "text",
       "id": "welcome_message",
       "label": "Message d'accueil",
-      "default": "Je suis l’assistant VADF, là pour vous guider et vous accompagner dans vos démarches.",
+      "default": "Bonjour, Je suis l’assistant VADF, là pour vous guider et vous accompagner dans vos démarches.",
       "info": "Message affiché dans le header"
     },
     {
