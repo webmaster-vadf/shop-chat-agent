@@ -190,10 +190,10 @@ MCP endpoints are hit directly via `fetch()` with JSON-RPC payloads (see `_makeJ
 When `promptType: 'vadfAssistant'`, the system uses hybrid intent detection with MCP fallback:
 - **VADF-specific intents** (handled by rule-based system):
   - Account management (4 intents): `creation_compte`, `activation_compte`, `mot_de_passe_oublie`, `mise_a_jour_infos_entreprise`
-  - Support (2 intents): `escalade_support`, `faq`
-  - Product info (9 intents): `origine_produit`, `materiaux`, `personnalisation`, `b2b_only`, `reliquat`, `stock_indisponible`, `devis`, `tarifs`, `fiches_techniques`
+  - Support (3 intents): `escalade_support`, `erreur_generique`, `faq`
+  - Product info (12 intents): `origine_produit`, `materiaux`, `fabrication`, `personnalisation`, `b2b_only`, `decouvrir_produits`, `commander_produits`, `reliquat`, `stock_indisponible`, `devis`, `tarifs`, `fiches_techniques`
   - General (3 intents): `salutation`, `remerciement`, `au_revoir`
-  - Total: 17 intents with conditional responses and variable replacement support
+  - Total: 22 intents with conditional responses and variable replacement support
   - Checks customer account status via `vadf-customer-account.server.js`
   - Returns templated responses from `app/prompts/vadf_reponses.json`
   - Triggers support escalation for non-professional accounts
@@ -206,7 +206,7 @@ When `promptType: 'vadfAssistant'`, the system uses hybrid intent detection with
 
 **Intent Detection Flow:**
 1. Check if message contains product keywords → MCP
-2. Check for VADF-specific account/support keywords (17 intents) → VADF responses
+2. Check for VADF-specific account/support keywords (22 intents) → VADF responses
 3. Check for generic greetings/thanks → MCP (treated as fallback)
 4. Default (`unknown` intent) → MCP
 
@@ -264,6 +264,14 @@ Ensure the `application_url` in `shopify.app.toml` matches your production domai
 - Tools separated into `storefrontTools` and `customerTools` arrays
 - Tool routing based on tool name when `callTool()` invoked
 - Customer tools require access token from database (conversation-scoped)
+
+**Logging & Debugging:**
+- Comprehensive console logs throughout the chat flow with emoji prefixes for easy filtering
+- VADF mode logs: `🚀 [VADF]`, `🔍 [CHAT]`, `🎯 [CHAT]` for intent detection and response generation
+- Claude mode logs: `🤖 [CLAUDE]`, `🔄 [CLAUDE]` for conversation turns
+- Service logs: `🔵 [CLAUDE-SERVICE]`, `🔧 [TOOL]`, `📡 [SSE]` for streaming and tool usage
+- Session logs: `🚀 [SESSION]`, `💾 [SESSION]`, `📊 [SESSION]` for request handling
+- Use grep with emoji/tag to filter specific flows: `npm run dev | grep "🚀 \[VADF\]"`
 
 ## Key Files to Understand
 
