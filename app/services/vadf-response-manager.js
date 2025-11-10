@@ -48,20 +48,24 @@ class VADFResponseManager {
       mot_de_passe_oublie: ["mot de passe", "oublié", "reset", "réinitialiser"],
       mise_a_jour_infos_entreprise: ["mettre à jour", "modifier", "email", "coordonnées", "changement"],
 
-      // Support (2 intents)
+      // Support (3 intents)
       escalade_support: ["problème complexe", "support technique", "bloqué", "bug"],
+      erreur_generique: ["erreur", "ne comprends pas", "reformuler", "incompréhensible"],
       faq: ["faq", "aide", "question", "informations"],
 
-      // Produits (9 intents)
-      origine_produit: ["origine", "fabriqué", "provenance", "made in", "fabrication"],
-      materiaux: ["matériaux", "tissus", "matières", "d'où viennent", "tissus locaux"],
-      personnalisation: ["personnaliser", "personnalisation", "broderie", "sérigraphie", "impression"],
-      b2b_only: ["b2b", "particulier", "professionnel", "entreprise", "qui peut commander"],
-      reliquat: ["reliquat", "réapprovisionnement", "rupture"],
-      stock_indisponible: ["indisponible", "non disponible", "quand disponible"],
-      devis: ["devis", "prix mesure", "devis personnalisé"],
-      tarifs: ["voir tarifs", "voir prix", "tarifs produits", "prix articles"],
-      fiches_techniques: ["fiche technique", "photos produits", "documentation", "caractéristiques"]
+      // Produits (12 intents)
+      origine_produit: ["origine", "provenance", "made in", "d'où viennent"],
+      fabrication: ["fabriqué", "fabrication", "production locale", "vêtements écologiques", "fabrication responsable"],
+      materiaux: ["matériaux", "tissus", "matières", "composition", "tissus locaux", "matériaux écologiques"],
+      personnalisation: ["personnaliser", "personnalisation", "broderie", "sérigraphie", "impression", "marquage", "customisation"],
+      b2b_only: ["b2b", "particulier", "professionnel", "entreprise", "qui peut commander", "pas une entreprise"],
+      decouvrir_produits: ["découvrir", "quels produits", "voir catalogue", "produits disponibles", "que vendez"],
+      commander_produits: ["comment commander", "passer commande", "faire un achat", "acheter"],
+      reliquat: ["reliquat", "réapprovisionnement", "rupture de stock", "demander reliquat", "réassort"],
+      stock_indisponible: ["indisponible", "non disponible", "quand disponible", "trouve pas articles", "article introuvable"],
+      devis: ["devis", "prix mesure", "devis personnalisé", "obtenir devis", "demander devis"],
+      tarifs: ["voir tarifs", "voir prix", "tarifs produits", "prix articles", "combien coûte"],
+      fiches_techniques: ["fiche technique", "photos produits", "documentation", "caractéristiques", "spécifications", "guide impression"]
     };
 
     // Intents génériques (à renvoyer vers MCP si détectés)
@@ -71,22 +75,8 @@ class VADFResponseManager {
       au_revoir: ["au revoir", "bye", "à bientôt", "goodbye"]
     };
 
-    // Mots-clés produit (doivent basculer vers MCP pour recherche produits)
-    const productKeywords = ["produit", "article", "cherche", "recherche", "prix", "stock", "disponible", "acheter", "commander", "panier", "cart", "commande"];
-
-    // Chercher d'abord les mots-clés produit = fallback MCP
-    console.log('🔎 [VADF INTENT] Step 1: Checking product keywords');
-    const foundProductKeyword = productKeywords.find(k => msg.includes(k));
-    if (foundProductKeyword) {
-      console.log(`✅ [VADF INTENT] Product keyword found: "${foundProductKeyword}"`);
-      console.log('🔄 [VADF INTENT] Returning "unknown" for MCP fallback');
-      console.log('════════════════════════════════════════════════════════');
-      return "unknown"; // Force fallback vers MCP Storefront
-    }
-    console.log('⚪ [VADF INTENT] No product keywords found');
-
-    // Chercher ensuite les intents spécifiques VADF
-    console.log('🔎 [VADF INTENT] Step 2: Checking specific VADF intents');
+    // Chercher d'abord les intents spécifiques VADF (priorité haute)
+    console.log('🔎 [VADF INTENT] Step 1: Checking specific VADF intents');
     for (const [intent, keywords] of Object.entries(specificMapping)) {
       const foundKeyword = keywords.find(k => msg.includes(k));
       if (foundKeyword) {
