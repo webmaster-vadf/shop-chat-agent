@@ -374,8 +374,19 @@ async function handleChatSession({
     // --- FIN INTÉGRATION VADF ---
 
     // Sinon, flux Claude classique
+    console.log('\n\n════════════════════════════════════════════════════════');
+    console.log('🤖 [CLAUDE] Starting Claude conversation flow');
+    console.log('📊 [CLAUDE] Conversation history length:', conversationHistory.length);
+    console.log('🛠️ [CLAUDE] Available tools:', mcpClient.tools?.length || 0);
+    console.log('⚙️ [CLAUDE] Prompt type:', promptType);
+    console.log('════════════════════════════════════════════════════════\n');
+
     let finalMessage = { role: 'user', content: userMessage };
+    let turnCount = 0;
     while (finalMessage.stop_reason !== "end_turn") {
+      turnCount++;
+      console.log(`\n🔄 [CLAUDE] Starting conversation turn ${turnCount}`);
+
       finalMessage = await claudeService.streamConversation(
         {
           messages: conversationHistory,
@@ -384,33 +395,67 @@ async function handleChatSession({
         },
         {
           onText: (textDelta) => {
+            console.log('📝 [CLAUDE] Text delta received (length:', textDelta?.length || 0, ')');
             stream.sendMessage({
               type: 'chunk',
               chunk: textDelta
             });
           },
           onMessage: (message) => {
+            console.log('✅ [CLAUDE] Message completed');
+            console.log('   - Role:', message.role);
+            console.log('   - Content type:', Array.isArray(message.content) ? 'array' : typeof message.content);
+            console.log('   - Content items:', Array.isArray(message.content) ? message.content.length : 'N/A');
+            if (Array.isArray(message.content)) {
+              message.content.forEach((item, idx) => {
+                console.log(`   - Content[${idx}]:`, item.type);
+              });
+            }
+
             conversationHistory.push({
               role: message.role,
               content: message.content
             });
+
+            console.log('💾 [CLAUDE] Saving assistant message to database');
             saveMessage(conversationId, message.role, JSON.stringify(message.content))
               .catch((error) => {
-                console.error("Error saving message to database:", error);
+                console.error("❌ [CLAUDE] Error saving message to database:", error);
               });
+
+            console.log('📤 [CLAUDE] Sending message_complete event to client');
             stream.sendMessage({ type: 'message_complete' });
           },
           onToolUse: async (content) => {
             const toolName = content.name;
             const toolArgs = content.input;
             const toolUseId = content.id;
+
+            console.log('\n🔧 [TOOL] Tool use detected');
+            console.log('   - Tool name:', toolName);
+            console.log('   - Tool ID:', toolUseId);
+            console.log('   - Arguments:', JSON.stringify(toolArgs, null, 2));
+
             const toolUseMessage = `Calling tool: ${toolName} with arguments: ${JSON.stringify(toolArgs)}`;
             stream.sendMessage({
               type: 'tool_use',
               tool_use_message: toolUseMessage
             });
+
+            console.log('⚙️ [TOOL] Calling MCP tool:', toolName);
             const toolUseResponse = await mcpClient.callTool(toolName, toolArgs);
+
+            console.log('📥 [TOOL] Tool response received');
+            console.log('   - Has error:', !!toolUseResponse.error);
             if (toolUseResponse.error) {
+              console.log('   - Error code:', toolUseResponse.error.code);
+              console.log('   - Error message:', toolUseResponse.error.message);
+            } else {
+              console.log('   - Response type:', typeof toolUseResponse.result);
+            }
+
+            if (toolUseResponse.error) {
+              console.log('❌ [TOOL] Handling tool error');
               await toolService.handleToolError(
                 toolUseResponse,
                 toolName,
@@ -419,7 +464,9 @@ async function handleChatSession({
                 stream.sendMessage,
                 conversationId
               );
+              console.log('✅ [TOOL] Tool error handled');
             } else {
+              console.log('✅ [TOOL] Handling tool success');
               await toolService.handleToolSuccess(
                 toolUseResponse,
                 toolName,
@@ -428,7 +475,9 @@ async function handleChatSession({
                 productsToDisplay,
                 conversationId
               );
+              console.log('✅ [TOOL] Tool success handled, products to display:', productsToDisplay.length);
             }
+            console.log('📤 [TOOL] Sending new_message event');
             stream.sendMessage({ type: 'new_message' });
           },
           onContentBlock: (contentBlock) => {
@@ -441,9 +490,26 @@ async function handleChatSession({
           }
         }
       );
+
+      console.log(`✅ [CLAUDE] Conversation turn ${turnCount} completed`);
+      console.log('   - Stop reason:', finalMessage.stop_reason);
     }
+
+    console.log('\n════════════════════════════════════════════════════════');
+    console.log('🏁 [CLAUDE] Conversation complete');
+    console.log('   - Total turns:', turnCount);
+    console.log('   - Final stop reason:', finalMessage.stop_reason);
+    console.log('   - Products to display:', productsToDisplay.length);
+    console.log('════════════════════════════════════════════════════════\n');
+
+    console.log('📤 [CLAUDE] Sending end_turn event');
     stream.sendMessage({ type: 'end_turn' });
+
     if (productsToDisplay.length > 0) {
+      console.log('🛍️ [CLAUDE] Sending product results:', productsToDisplay.length, 'products');
+      productsToDisplay.forEach((product, idx) => {
+        console.log(`   - Product[${idx}]:`, product.title);
+      });
       stream.sendMessage({
         type: 'product_results',
         products: productsToDisplay
