@@ -102,8 +102,7 @@ The endpoint supports two modes:
 - Sends structured events: `chunk`, `message_complete`, `tool_use`, `product_results`, `end_turn`, etc.
 
 **VADF Services** (custom business logic):
-- **Intent matcher** (`app/services/vadf-intent-matcher.js`): Detects user intents using regex patterns (account activation, password reset, support escalation)
-- **Response manager** (`app/services/vadf-response-manager.js`): Generates templated responses from `app/prompts/vadf_reponses.json` based on detected intent
+- **Response manager** (`app/services/vadf-response-manager.js`): Detects user intents using regex patterns and generates templated responses from `app/prompts/vadf_reponses.json`
 - **Customer account checker** (`app/services/vadf-customer-account.server.js`): Validates professional customer status via Shopify Customer API
 
 #### 4. Database Schema (`prisma/schema.prisma`)
@@ -289,8 +288,8 @@ Ensure the `application_url` in `shopify.app.toml` matches your production domai
 - [app/prompts/prompts.json](app/prompts/prompts.json): System prompts by type
 
 **VADF Custom Logic:**
-- [app/services/vadf-intent-matcher.js](app/services/vadf-intent-matcher.js): Intent detection with regex
-- [app/services/vadf-response-manager.js](app/services/vadf-response-manager.js): Response generation
+- [app/services/vadf-response-manager.js](app/services/vadf-response-manager.js): Intent detection and response generation
+- [app/services/vadf-customer-account.server.js](app/services/vadf-customer-account.server.js): Customer account validation
 - [app/prompts/vadf_reponses.json](app/prompts/vadf_reponses.json): Templated responses
 
 **Storefront UI:**
