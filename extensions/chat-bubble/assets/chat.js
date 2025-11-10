@@ -181,7 +181,7 @@
 
     addWelcomeMessage: function() {
       const welcomeMsg = window.shopChatConfig?.welcomeMessage ||
-                        "Bonjour ! Je suis l'assistant VADF. Comment puis-je vous aider aujourd'hui ?";
+                        "Voici les sujets sur lesquels je peux vous orienter:\n• Créer un compte professionnel\n• Activer votre compte professionnel\n• Réinitialiser votre mot de passe\n• Mettre à jour les informations de votre entreprise\n• Découvrir nos produits et leurs caractéristiques\n• Commander des produits en stock\n• Demander des produits en reliquat";
       this.addMessageToUI('assistant', welcomeMsg);
     },
 
@@ -262,7 +262,17 @@
 
     sendToAPI: async function(message) {
       const config = window.shopChatConfig || {};
-      const apiBaseUrl = config.apiBaseUrl || 'https://shop-chat-agent-bold-flower-713.fly.dev';
+
+      // Auto-detect local vs production environment
+      const isLocal = window.location.hostname.includes('localhost') ||
+                      window.location.hostname.includes('127.0.0.1') ||
+                      window.location.port !== '';
+
+      const defaultApiUrl = isLocal
+        ? 'http://localhost:3000'  // Local dev server
+        : 'https://shop-chat-agent-bold-flower-713.fly.dev';  // Production
+
+      const apiBaseUrl = config.apiBaseUrl || defaultApiUrl;
       const shopDomain = window.Shopify?.shop || window.location.hostname;
       const shopId = window.shopId;
 
