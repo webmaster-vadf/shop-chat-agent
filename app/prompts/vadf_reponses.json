@@ -156,7 +156,7 @@
       "description": "Salutation d'accueil.",
       "responses": [
         {
-        "text": "\n•Créer un compte professionnel\n• Activer votre compte professionnel\n• Mettre à jour les informations de votre entreprise\n• Réinitialiser votre mot de passe\n• Découvrir nos produits et leurs caractéristiques\n• Commander des produits en stock\n• Demander des produits en reliquat\n\nComment puis-je vous aider aujourd'hui ?",
+        "text": "Je suis l’assistant VADF, là pour vous guider et vous accompagner dans vos démarches.\n• Créer un compte professionnel\n• Activer votre compte professionnel\n• Mettre à jour les informations de votre entreprise\n• Réinitialiser votre mot de passe\n• Découvrir nos produits et leurs caractéristiques\n• Commander des produits en stock\n• Demander des produits en reliquat",
         "conditions": []
         }
       ]
