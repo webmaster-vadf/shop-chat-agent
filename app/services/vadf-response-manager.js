@@ -143,7 +143,11 @@ class VADFResponseManager {
 
       if (!resp.conditions || resp.conditions.length === 0) {
         console.log('[VADF] No conditions, returning response');
-        return { text: this.replaceVars(resp.text, context), type: intent };
+        const finalText = this.replaceVars(resp.text, context);
+        if (intent === 'activation_compte') {
+          console.log('🎯 [VADF ACTIVATION_COMPTE] Response text being returned:', finalText);
+        }
+        return { text: finalText, type: intent };
       }
       let ok = true;
       for (const cond of resp.conditions) {

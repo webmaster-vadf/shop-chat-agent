@@ -214,17 +214,21 @@ async function handleChatSession({
 
     // --- INTÉGRATION VADF AVEC FALLBACK MCP ---
     if (promptType === 'vadfAssistant') {
-      console.log('════════════════════════════════════════════════════════');
-      console.log('🎯 [CHAT] VADF MODE ACTIVATED');
+      console.log('\n\n════════════════════════════════════════════════════════');
+      console.log('🚀🚀🚀 [CHAT] VADF MODE ACTIVATED 🚀🚀🚀');
       console.log('📝 [CHAT] User message:', userMessage);
-      console.log('════════════════════════════════════════════════════════');
+      console.log('📝 [CHAT] Message length:', userMessage?.length);
+      console.log('════════════════════════════════════════════════════════\n');
 
       // Utilisation du gestionnaire VADF asynchrone
       const vadfManager = await getVadfManager();
       console.log('✅ [CHAT] VADF Manager loaded');
 
       const vadfIntent = vadfManager.detectIntent(userMessage);
-      console.log('🔍 [CHAT] Intent detection result:', vadfIntent);
+      console.log('\n🔍🔍🔍 [CHAT] ===== INTENT DETECTION RESULT ===== 🔍🔍🔍');
+      console.log('🔍 [CHAT] Detected intent:', vadfIntent);
+      console.log('🔍 [CHAT] Is activation_compte?', vadfIntent === 'activation_compte');
+      console.log('════════════════════════════════════════════════════════\n');
 
       // Si aucun intent VADF n'est détecté, basculer vers Claude + MCP
       if (!vadfIntent || vadfIntent === 'unknown') {
@@ -242,9 +246,10 @@ async function handleChatSession({
         console.log('📋 [CHAT] Initial context:', vadfContext);
 
         // Vérification du compte client si l'intention concerne le compte
+        // NOTE: On ne vérifie PAS le compte pour activation_compte car on veut toujours la réponse par défaut
         let accountCheckResult = null;
         let email;
-        if (["activation_compte", "mot_de_passe_oublie", "mise_a_jour_infos_entreprise"].includes(vadfIntent)) {
+        if (["mot_de_passe_oublie", "mise_a_jour_infos_entreprise"].includes(vadfIntent)) {
           console.log('👤 [CHAT] Account-related intent detected:', vadfIntent);
           console.log('📝 [CHAT] User message:', userMessage);
 
@@ -275,6 +280,8 @@ async function handleChatSession({
           } else {
             console.log('⚪ [CHAT] Account status is neither active nor inactive:', accountCheckResult?.status || 'null');
           }
+        } else if (vadfIntent === 'activation_compte') {
+          console.log('👤 [CHAT] activation_compte intent - skipping account check, using default VADF response');
         }
 
         // Enrichir le contexte client avec des infos supplémentaires si disponibles
@@ -304,17 +311,25 @@ async function handleChatSession({
         console.log('   - Full text length:', vadfResponse.text?.length);
 
         // Si la vérification de compte a un message spécifique, on le priorise
+        // SAUF pour activation_compte avec status not_found : on garde la réponse VADF par défaut
         console.log('🔍 [CHAT] Checking if account message should override VADF response');
         console.log('   - accountCheckResult exists:', !!accountCheckResult);
         console.log('   - accountCheckResult.message exists:', !!accountCheckResult?.message);
+        console.log('   - accountCheckResult.status:', accountCheckResult?.status);
 
-        if (accountCheckResult && accountCheckResult.message) {
+        const shouldUseAccountMessage = accountCheckResult && accountCheckResult.message
+          && !(vadfIntent === 'activation_compte' && accountCheckResult.status === 'not_found');
+
+        if (shouldUseAccountMessage) {
           console.log('⚠️ [CHAT] OVERRIDE: Using account check message instead of VADF response');
           console.log('   - Original VADF text:', vadfResponse.text?.substring(0, 80));
           console.log('   - Override text:', accountCheckResult.message?.substring(0, 80));
           vadfResponse = { ...vadfResponse, text: accountCheckResult.message };
         } else {
           console.log('✅ [CHAT] NO OVERRIDE: Using VADF response as-is');
+          if (vadfIntent === 'activation_compte' && accountCheckResult?.status === 'not_found') {
+            console.log('   - Reason: activation_compte with not_found status - keeping default VADF response');
+          }
         }
 
         console.log('════════════════════════════════════════════════════════');

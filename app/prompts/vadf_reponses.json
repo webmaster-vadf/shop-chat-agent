@@ -38,7 +38,7 @@
       ],
       "responses": [
         {
-          "text": "Merci d’écrire à support@vadf.fr en indiquant le nom de votre entreprise, ainsi que l’adresse e-mail ou le numéro de téléphone associé à votre compte. Cela nous permettra de vérifier si votre compte est bien enregistré en tant que client professionnel sur notre site.",
+          "text": "Merci d'écrire à support@vadf.fr en indiquant le nom de votre entreprise, ainsi que l'adresse e-mail ou le numéro de téléphone associé à votre compte, en indiquant \"Activation de compte\" dans l'objet de votre email. Cela nous permettra de vérifier si votre compte est bien enregistré en tant que client professionnel sur notre site.",
           "conditions": []
         },
         {
