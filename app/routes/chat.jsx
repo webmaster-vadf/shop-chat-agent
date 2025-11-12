@@ -232,8 +232,15 @@ async function handleChatSession({
 
       // Si aucun intent VADF n'est détecté, basculer vers Claude + MCP
       if (!vadfIntent || vadfIntent === 'unknown') {
-        console.log('⚠️ [CHAT] No specific VADF intent detected, falling back to Claude + MCP');
-        console.log('════════════════════════════════════════════════════════');
+        console.log('\n⚠️⚠️⚠️ [CHAT] ===== MCP FALLBACK TRIGGERED ===== ⚠️⚠️⚠️');
+        console.log('🔄 [CHAT] No specific VADF intent detected');
+        console.log('🔄 [CHAT] Detected intent value:', vadfIntent);
+        console.log('🔄 [CHAT] Falling back to Claude + Shopify MCP');
+        console.log('🛍️ [CHAT] Available Storefront MCP tools:', storefrontMcpTools.length);
+        console.log('👤 [CHAT] Available Customer MCP tools:', customerMcpTools.length);
+        console.log('📝 [CHAT] Claude will search shop data for: "' + userMessage + '"');
+        console.log('🎯 [CHAT] System prompt type:', promptType);
+        console.log('════════════════════════════════════════════════════════\n');
         // Ne pas retourner ici, laisser continuer vers le flux Claude
       } else {
         // Intent VADF spécifique détecté, traiter avec le système VADF
