@@ -105,7 +105,7 @@
       ],
       "responses": [
         {
-          "text": "Merci de nous envoyer les coordonnées de votre entreprise par e-mail à contact@vadf.fr. Notre équipe support client prendra contact avec vous rapidement pour résoudre votre problème.",
+          "text": "Merci de nous envoyer les coordonnées de votre entreprise par e-mail à support@vadf.fr. Notre équipe support client prendra contact avec vous rapidement pour résoudre votre problème.",
           "conditions": []
         }
       ]
@@ -303,7 +303,7 @@
       "description": "Salutation d'accueil.",
       "responses": [
         {
-        "text": "Bonjour ! Je suis l'assistant VADF, là pour vous guider et vous accompagner dans vos démarches.\n\nJe peux vous aider avec :\n\n👤 Compte professionnel\n• Créer un compte professionnel\n• Activer votre compte\n• Mettre à jour vos informations\n• Réinitialiser votre mot de passe\n\n🛍️ Produits et commandes\n• Découvrir nos produits et leurs caractéristiques\n• Consulter les tarifs et fiches techniques\n• Commander des produits en stock\n• Demander des produits en reliquat\n• Obtenir un devis personnalisé\n\n🌿 Fabrication\n• Origine et fabrication des produits\n• Matériaux utilisés (bio/recyclés)\n• Personnalisation (broderie, sérigraphie)\n\nComment puis-je vous aider aujourd'hui ?",
+        "text": "Bienvenue dans l'univers VADF !  Je peux vous guider et vous accompagner dans vos démarches.\n\nJe peux vous aider avec :\n\n👤 Compte professionnel\n• Créer un compte professionnel\n• Activer votre compte\n• Mettre à jour vos informations\n• Réinitialiser votre mot de passe\n\n🛍️ Produits et commandes\n• Découvrir nos produits et leurs caractéristiques\n• Consulter les tarifs et fiches techniques\n• Commander des produits en stock\n• Demander des produits en reliquat\n• Obtenir un devis personnalisé\n\n🌿 Fabrication\n• Origine et fabrication des produits\n• Matériaux utilisés (bio/recyclés)\n• Personnalisation (broderie, sérigraphie)\n\nComment puis-je vous aider aujourd'hui ?",
         "conditions": []
         }
       ]
@@ -323,7 +323,7 @@
     "erreur_generique": {
       "description": "Gestion des erreurs ou incompréhensions.",
       "responses": [
-        { "text": "Je n'ai pas bien compris votre demande. Pouvez-vous reformuler ou écrire directement à contact@vadf.fr ?", "conditions": ["intent_non_reconnue == true"] }
+        { "text": "Je n'ai pas bien compris votre demande. Pouvez-vous reformuler ou écrire directement à support@vadf.fr ?", "conditions": ["intent_non_reconnue == true"] }
       ]
     },
     "faq": {
@@ -336,7 +336,7 @@
       ],
       "responses": [
         {
-          "text": "Pour toutes vos questions, je vous invite à consulter notre FAQ complète :\n\n👉 https://vadf.fr/pages/faq\n\nVous y trouverez des réponses détaillées sur nos produits, nos services et les modalités de commande.\n\nSi vous ne trouvez pas la réponse à votre question, n'hésitez pas à nous contacter à contact@vadf.fr",
+          "text": "Pour toutes vos questions, je vous invite à consulter notre FAQ complète :\n\n👉 https://vadf.fr/pages/faq\n\nVous y trouverez des réponses détaillées sur nos produits, nos services et les modalités de commande.\n\nSi vous ne trouvez pas la réponse à votre question, n'hésitez pas à nous contacter à support@vadf.fr",
           "conditions": []
         }
       ]
@@ -344,8 +344,8 @@
   },
   "common_phrases": {
     "wait": "Un instant, je vérifie cela pour vous...",
-    "contact_support": "Pour toute demande complexe, n'hésitez pas à nous contacter à contact@vadf.fr.",
-    "error": "Une erreur est survenue. Merci de réessayer ou d'écrire à contact@vadf.fr pour une assistance personnalisée."
+    "contact_support": "Pour toute demande complexe, n'hésitez pas à nous contacter à support@vadf.fr.",
+    "error": "Une erreur est survenue. Merci de réessayer ou d'écrire à support@vadf.fr pour une assistance personnalisée."
   },
   "context": {
     "isFirstMessage": false,
