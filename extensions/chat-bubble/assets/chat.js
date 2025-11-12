@@ -276,6 +276,14 @@
       const shopDomain = window.Shopify?.shop || window.location.hostname;
       const shopId = window.shopId;
 
+      console.log('💬 [CHAT-FRONTEND] Sending message to API');
+      console.log('  - Message:', message);
+      console.log('  - API URL:', `${apiBaseUrl}/chat`);
+      console.log('  - Conversation ID:', this.conversationId);
+      console.log('  - Prompt type:', config.promptType || 'vadfAssistant');
+      console.log('  - Shop domain:', shopDomain);
+      console.log('  - Shop ID:', shopId);
+
       try {
         const response = await fetch(`${apiBaseUrl}/chat`, {
           method: 'POST',
@@ -293,16 +301,23 @@
           })
         });
 
+        console.log('📡 [CHAT-FRONTEND] Response received');
+        console.log('  - Status:', response.status, response.statusText);
+        console.log('  - Headers:', Object.fromEntries(response.headers.entries()));
+
         if (!response.ok) {
+          console.error('❌ [CHAT-FRONTEND] HTTP error:', response.status);
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
+        console.log('✅ [CHAT-FRONTEND] Response OK, starting to read SSE stream...');
         this.removeTypingIndicator();
 
         // Handle Server-Sent Events stream
         await this.handleStreamResponse(response);
 
       } catch (error) {
+        console.error('❌ [CHAT-FRONTEND] Error:', error);
         this.removeTypingIndicator();
         this.addMessageToUI('assistant', "Désolé, une erreur s'est produite. Veuillez réessayer.");
       }
@@ -313,12 +328,18 @@
       const decoder = new TextDecoder();
       let buffer = '';
       let currentMessage = '';
+      let eventCount = 0;
+
+      console.log('📥 [CHAT-FRONTEND] Starting to read SSE stream...');
 
       try {
         while (true) {
           const { done, value } = await reader.read();
 
-          if (done) break;
+          if (done) {
+            console.log('✅ [CHAT-FRONTEND] Stream reading complete');
+            break;
+          }
 
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n');
@@ -329,6 +350,7 @@
               const data = line.slice(6);
 
               if (data === '[DONE]') {
+                console.log('🏁 [CHAT-FRONTEND] Received [DONE] signal');
                 if (currentMessage) {
                   this.addMessageToUI('assistant', currentMessage);
                   currentMessage = '';
@@ -338,31 +360,50 @@
 
               try {
                 const event = JSON.parse(data);
+                eventCount++;
+                console.log(`📨 [CHAT-FRONTEND] Event #${eventCount}:`, event.type);
 
-                if (event.type === 'content_block_delta') {
+                if (event.type === 'id') {
+                  console.log('  - Conversation ID:', event.conversation_id);
+                } else if (event.type === 'chunk') {
+                  console.log('  - Text chunk (length):', event.chunk?.length || 0);
+                  currentMessage += event.chunk || '';
+                } else if (event.type === 'content_block_delta') {
+                  console.log('  - Delta text (length):', event.delta?.text?.length || 0);
                   currentMessage += event.delta?.text || '';
-                } else if (event.type === 'message_stop') {
+                } else if (event.type === 'message_stop' || event.type === 'message_complete') {
+                  console.log('  - Message complete, total length:', currentMessage.length);
                   if (currentMessage) {
                     this.addMessageToUI('assistant', currentMessage);
                     currentMessage = '';
                   }
                 } else if (event.type === 'vadf_response') {
-
+                  console.log('  - VADF response received');
+                  console.log('    * Intent:', event.vadf_intent);
+                  console.log('    * Type:', event.vadf_type);
+                  console.log('    * Text length:', event.text?.length || 0);
                   this.removeTypingIndicator();
                   if (event.text) {
                     this.addMessageToUI('assistant', event.text);
                   }
                 } else if (event.type === 'product_results' && event.products) {
+                  console.log('  - Product results:', event.products.length, 'products');
                   this.displayProductResults(event.products);
                 } else if (event.type === 'auth_required' && event.auth_url) {
+                  console.log('  - Auth required, URL:', event.auth_url);
                   window.shopAuthUrl = event.auth_url;
                   this.addMessageToUI('assistant', event.message);
                 } else if (event.type === 'tool_use') {
+                  console.log('  - Tool use:', event.tool_use_message);
                   this.addToolUseToUI(event);
                 } else if (event.type === 'end_turn') {
+                  console.log('  - End turn');
                   this.removeTypingIndicator();
-                } 
+                } else {
+                  console.log('  - Unhandled event type:', event.type);
+                }
               } catch (e) {
+                console.error('❌ [CHAT-FRONTEND] Error parsing SSE event:', e);
               }
             }
           }
