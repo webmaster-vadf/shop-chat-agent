@@ -303,7 +303,7 @@
       "description": "Salutation d'accueil.",
       "responses": [
         {
-        "text": "Bienvenue dans l'univers VADF !  Je peux vous guider et vous accompagner dans vos démarches.\n\nJe peux vous aider avec :\n\n👤 Compte professionnel\n• Créer un compte professionnel\n• Activer votre compte\n• Mettre à jour vos informations\n• Réinitialiser votre mot de passe\n\n🛍️ Produits et commandes\n• Découvrir nos produits et leurs caractéristiques\n• Consulter les tarifs et fiches techniques\n• Commander des produits en stock\n• Demander des produits en reliquat\n• Obtenir un devis personnalisé\n\n🌿 Fabrication\n• Origine et fabrication des produits\n• Matériaux utilisés (bio/recyclés)\n• Personnalisation (broderie, sérigraphie)\n\nComment puis-je vous aider aujourd'hui ?",
+        "text": "Bienvenue dans l'univers VADF !\nJe peux vous guider et vous accompagner dans vos démarches.\n\nJe peux vous aider avec :\n\n👤 Compte professionnel\n• Créer un compte professionnel\n• Activer votre compte\n• Mettre à jour vos informations\n• Réinitialiser votre mot de passe\n\n🛍️ Produits et commandes\n• Découvrir nos produits et leurs caractéristiques\n• Consulter les tarifs et fiches techniques\n• Commander des produits en stock\n• Demander des produits en reliquat\n• Obtenir un devis personnalisé\n\n🌿 Fabrication\n• Origine et fabrication des produits\n• Matériaux utilisés (bio/recyclés)\n• Personnalisation (broderie, sérigraphie)",
         "conditions": []
         }
       ]
