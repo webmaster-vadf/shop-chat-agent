@@ -268,10 +268,14 @@ Ensure the `application_url` in `shopify.app.toml` matches your production domai
 **Logging & Debugging:**
 - Comprehensive console logs throughout the chat flow with emoji prefixes for easy filtering
 - VADF mode logs: `🚀 [VADF]`, `🔍 [CHAT]`, `🎯 [CHAT]` for intent detection and response generation
+- MCP fallback logs: `⚠️⚠️⚠️ [CHAT]` when no VADF intent matches and Claude searches shop data
 - Claude mode logs: `🤖 [CLAUDE]`, `🔄 [CLAUDE]` for conversation turns
 - Service logs: `🔵 [CLAUDE-SERVICE]`, `🔧 [TOOL]`, `📡 [SSE]` for streaming and tool usage
 - Session logs: `🚀 [SESSION]`, `💾 [SESSION]`, `📊 [SESSION]` for request handling
+- MCP client logs: `🏪 [MCP-CLIENT]` for Storefront tools, `👤 [MCP-CLIENT]` for Customer Account tools
+- Tool call logs: `🛍️ [MCP-CLIENT]` for Storefront tool execution, shows tool name, arguments, and results
 - Use grep with emoji/tag to filter specific flows: `npm run dev | grep "🚀 \[VADF\]"`
+- MCP fallback example: `npm run dev | grep "⚠️⚠️⚠️"` to see when Claude searches shop data
 
 ## Key Files to Understand
 
