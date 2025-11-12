@@ -369,7 +369,7 @@
                 } else if (event.type === 'end_turn') {
                   this.removeTypingIndicator();
                 } 
-              }
+              } catch (e) {}
             }
           }
         }
