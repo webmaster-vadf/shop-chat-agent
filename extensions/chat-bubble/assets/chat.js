@@ -317,7 +317,7 @@
         console.log('✅ [CHAT-FRONTEND] Response OK, starting to read SSE stream...');
 
         // Handle Server-Sent Events stream
-        // Note: typing indicator will be removed when first content arrives
+        // Note: typing indicator will be removed when end_turn event arrives
         await this.handleStreamResponse(response);
 
       } catch (error) {
@@ -334,7 +334,6 @@
       let buffer = '';
       let currentMessage = '';
       let eventCount = 0;
-      let firstContentReceived = false; // Track if we received any content yet
 
       console.log('📥 [CHAT-FRONTEND] Starting to read SSE stream...');
 
@@ -373,21 +372,9 @@
                   console.log('  - Conversation ID:', event.conversation_id);
                 } else if (event.type === 'chunk') {
                   console.log('  - Text chunk (length):', event.chunk?.length || 0);
-                  // Remove typing indicator on first content
-                  if (!firstContentReceived && event.chunk) {
-                    console.log('💡 [CHAT-FRONTEND] First content received (chunk) - removing typing indicator');
-                    this.removeTypingIndicator();
-                    firstContentReceived = true;
-                  }
                   currentMessage += event.chunk || '';
                 } else if (event.type === 'content_block_delta') {
                   console.log('  - Delta text (length):', event.delta?.text?.length || 0);
-                  // Remove typing indicator on first content
-                  if (!firstContentReceived && event.delta?.text) {
-                    console.log('💡 [CHAT-FRONTEND] First content received (content_block_delta) - removing typing indicator');
-                    this.removeTypingIndicator();
-                    firstContentReceived = true;
-                  }
                   currentMessage += event.delta?.text || '';
                 } else if (event.type === 'message_stop' || event.type === 'message_complete') {
                   console.log('  - Message complete, total length:', currentMessage.length);
@@ -400,40 +387,23 @@
                   console.log('    * Intent:', event.vadf_intent);
                   console.log('    * Type:', event.vadf_type);
                   console.log('    * Text length:', event.text?.length || 0);
-                  // Remove typing indicator for VADF responses
-                  if (!firstContentReceived) {
-                    console.log('💡 [CHAT-FRONTEND] First content received (vadf_response) - removing typing indicator');
-                    this.removeTypingIndicator();
-                    firstContentReceived = true;
-                  }
                   if (event.text) {
                     this.addMessageToUI('assistant', event.text);
                   }
                 } else if (event.type === 'product_results' && event.products) {
                   console.log('  - Product results:', event.products.length, 'products');
-                  // Remove typing indicator for product results
-                  if (!firstContentReceived) {
-                    console.log('💡 [CHAT-FRONTEND] First content received (product_results) - removing typing indicator');
-                    this.removeTypingIndicator();
-                    firstContentReceived = true;
-                  }
                   this.displayProductResults(event.products);
                 } else if (event.type === 'auth_required' && event.auth_url) {
                   console.log('  - Auth required, URL:', event.auth_url);
                   window.shopAuthUrl = event.auth_url;
-                  // Remove typing indicator for auth messages
-                  if (!firstContentReceived) {
-                    console.log('💡 [CHAT-FRONTEND] First content received (auth_required) - removing typing indicator');
-                    this.removeTypingIndicator();
-                    firstContentReceived = true;
-                  }
                   this.addMessageToUI('assistant', event.message);
                 } else if (event.type === 'tool_use') {
                   console.log('  - Tool use:', event.tool_use_message);
                   this.addToolUseToUI(event);
                 } else if (event.type === 'end_turn') {
                   console.log('  - End turn');
-                  // Typing indicator already removed when first content arrived
+                  console.log('💡 [CHAT-FRONTEND] End turn received - removing typing indicator');
+                  this.removeTypingIndicator();
                 } else {
                   console.log('  - Unhandled event type:', event.type);
                 }
