@@ -258,40 +258,64 @@ export async function getCustomerAccountUrl(conversationId) {
  * Get chat statistics for reporting
  * @param {Date} startDate - Start date for the report
  * @param {Date} endDate - End date for the report
+ * @param {string} shopId - Optional shop ID to filter by
  * @returns {Promise<Object>} - Statistics object
  */
-export async function getChatStats(startDate, endDate) {
+export async function getChatStats(startDate, endDate, shopId = null) {
   try {
+    // Build conversation filter
+    const conversationFilter = {
+      createdAt: {
+        gte: startDate,
+        lte: endDate
+      }
+    };
+    if (shopId) {
+      conversationFilter.shopId = { contains: shopId };
+    }
+
     // Total conversations in period
     const conversations = await prisma.conversation.findMany({
-      where: {
-        createdAt: {
-          gte: startDate,
-          lte: endDate
-        }
-      },
+      where: conversationFilter,
       include: {
         messages: true
       }
     });
 
+    // Get conversation IDs for message filtering
+    const conversationIds = conversations.map(c => c.id);
+
+    // Build message filter
+    const messageFilter = {
+      createdAt: {
+        gte: startDate,
+        lte: endDate
+      }
+    };
+    if (shopId && conversationIds.length > 0) {
+      messageFilter.conversationId = { in: conversationIds };
+    } else if (shopId) {
+      // No conversations found for this shop, return empty
+      return {
+        totalConversations: 0,
+        totalMessages: 0,
+        userMessages: 0,
+        assistantMessages: 0,
+        conversations: [],
+        allUserMessages: [],
+        allAssistantMessages: []
+      };
+    }
+
     // Total messages
     const totalMessages = await prisma.message.count({
-      where: {
-        createdAt: {
-          gte: startDate,
-          lte: endDate
-        }
-      }
+      where: messageFilter
     });
 
     // User messages only
     const userMessages = await prisma.message.count({
       where: {
-        createdAt: {
-          gte: startDate,
-          lte: endDate
-        },
+        ...messageFilter,
         role: 'user'
       }
     });
@@ -299,25 +323,19 @@ export async function getChatStats(startDate, endDate) {
     // Get all user messages for analysis
     const allUserMessages = await prisma.message.findMany({
       where: {
-        createdAt: {
-          gte: startDate,
-          lte: endDate
-        },
+        ...messageFilter,
         role: 'user'
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'asc' }
     });
 
     // Get all assistant messages for display
     const allAssistantMessages = await prisma.message.findMany({
       where: {
-        createdAt: {
-          gte: startDate,
-          lte: endDate
-        },
+        ...messageFilter,
         role: 'assistant'
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'asc' }
     });
 
     return {

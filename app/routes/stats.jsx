@@ -1,36 +1,17 @@
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
+import { useState } from "react";
 import { getChatStats, getRecentConversations } from "../db.server";
 
 export const loader = async ({ request }) => {
-  const url = new URL(request.url);
-  const period = url.searchParams.get("period") || "week";
-
-  // Calculate date range
+  // Get ALL data from Sept 9, 2025 at 12:43
+  const startDate = new Date('2025-09-09T12:43:00');
   const endDate = new Date();
-  let startDate = new Date();
-
-  switch (period) {
-    case "day":
-      startDate.setDate(startDate.getDate() - 1);
-      break;
-    case "week":
-      startDate.setDate(startDate.getDate() - 7);
-      break;
-    case "month":
-      startDate.setMonth(startDate.getMonth() - 1);
-      break;
-    case "all":
-      startDate = new Date(0);
-      break;
-    default:
-      startDate.setDate(startDate.getDate() - 7);
-  }
 
   const stats = await getChatStats(startDate, endDate);
-  const recentConversations = await getRecentConversations(30);
+  const recentConversations = await getRecentConversations(100);
 
-  // Extract plain text from user messages
+  // Extract plain text from user messages - NO LIMIT
   const userQuestions = stats.allUserMessages
     .map((msg) => {
       let content = msg.content;
@@ -48,13 +29,14 @@ export const loader = async ({ request }) => {
         // Not JSON, use as-is
       }
       return {
-        content: content.substring(0, 200),
+        content: content,
         date: new Date(msg.createdAt).toLocaleString("fr-FR"),
         conversationId: msg.conversationId,
+        timestamp: new Date(msg.createdAt).getTime(),
       };
     })
     .filter(Boolean)
-    .slice(0, 50);
+    .sort((a, b) => a.timestamp - b.timestamp); // Sort ascending (oldest first)
 
   // Analyze intents
   const intentKeywords = {
@@ -113,10 +95,11 @@ export const loader = async ({ request }) => {
         content: content.substring(0, 300),
         date: new Date(msg.createdAt).toLocaleString("fr-FR"),
         conversationId: msg.conversationId,
+        timestamp: new Date(msg.createdAt).getTime(),
       };
     })
     .filter(Boolean)
-    .slice(0, 50);
+    .sort((a, b) => a.timestamp - b.timestamp);
 
   return json({
     stats: {
@@ -148,18 +131,35 @@ export const loader = async ({ request }) => {
           }
         })
         .join(" | ")
-        .substring(0, 100),
+        .substring(0, 200),
     })),
-    period,
   });
 };
 
 export default function Stats() {
-  const { stats, userQuestions, assistantResponses, intentCounts, recentConversations, period } = useLoaderData();
+  const { stats, userQuestions, assistantResponses, intentCounts, recentConversations } = useLoaderData();
+
+  // Sort states for tables
+  const [questionsSortAsc, setQuestionsSortAsc] = useState(true);
+  const [responsesSortAsc, setResponsesSortAsc] = useState(true);
+  const [conversationsSortAsc, setConversationsSortAsc] = useState(false);
 
   const intentRows = Object.entries(intentCounts)
     .filter(([, count]) => count > 0)
     .sort((a, b) => b[1] - a[1]);
+
+  // Sorted data
+  const sortedQuestions = [...userQuestions].sort((a, b) =>
+    questionsSortAsc ? a.timestamp - b.timestamp : b.timestamp - a.timestamp
+  );
+  const sortedResponses = [...assistantResponses].sort((a, b) =>
+    responsesSortAsc ? a.timestamp - b.timestamp : b.timestamp - a.timestamp
+  );
+  const sortedConversations = [...recentConversations].sort((a, b) => {
+    const dateA = new Date(a.createdAt.split('/').reverse().join('-'));
+    const dateB = new Date(b.createdAt.split('/').reverse().join('-'));
+    return conversationsSortAsc ? dateA - dateB : dateB - dateA;
+  });
 
   return (
     <html lang="fr">
@@ -186,22 +186,19 @@ export default function Stats() {
           .intent-bar { display: flex; align-items: center; gap: 10px; }
           .intent-bar .bar { height: 20px; background: #008060; border-radius: 4px; }
           .empty { color: #6d7175; font-style: italic; }
+          .sort-btn { background: none; border: none; cursor: pointer; font-size: 14px; padding: 4px 8px; border-radius: 4px; }
+          .sort-btn:hover { background: #e1e3e5; }
+          .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+          .section-header h2 { margin-bottom: 0; }
         `}</style>
       </head>
       <body>
         <div className="container">
           <h1>Dashboard Chat VADF</h1>
 
-          <select
-            className="period-select"
-            value={period}
-            onChange={(e) => window.location.href = `/stats?period=${e.target.value}`}
-          >
-            <option value="day">Dernières 24h</option>
-            <option value="week">7 derniers jours</option>
-            <option value="month">30 derniers jours</option>
-            <option value="all">Tout</option>
-          </select>
+          <p style={{ marginBottom: '20px', color: '#6d7175' }}>
+            Données depuis le 9 septembre 2025 à 12:43
+          </p>
 
           <div className="stats-grid">
             <div className="stat-card">
@@ -249,8 +246,13 @@ export default function Stats() {
           </div>
 
           <div className="section">
-            <h2>Conversations récentes</h2>
-            {recentConversations.length > 0 ? (
+            <div className="section-header">
+              <h2>Conversations récentes ({recentConversations.length})</h2>
+              <button className="sort-btn" onClick={() => setConversationsSortAsc(!conversationsSortAsc)}>
+                Trier par date {conversationsSortAsc ? "↑ croissant" : "↓ décroissant"}
+              </button>
+            </div>
+            {sortedConversations.length > 0 ? (
               <table>
                 <thead>
                   <tr>
@@ -260,7 +262,7 @@ export default function Stats() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recentConversations.slice(0, 10).map((c) => (
+                  {sortedConversations.map((c) => (
                     <tr key={c.id}>
                       <td>{c.createdAt}</td>
                       <td>{c.messageCount}</td>
@@ -275,8 +277,42 @@ export default function Stats() {
           </div>
 
           <div className="section">
-            <h2>Réponses données aux utilisateurs</h2>
-            {assistantResponses.length > 0 ? (
+            <div className="section-header">
+              <h2>Questions des utilisateurs ({userQuestions.length})</h2>
+              <button className="sort-btn" onClick={() => setQuestionsSortAsc(!questionsSortAsc)}>
+                Trier par date {questionsSortAsc ? "↑ croissant" : "↓ décroissant"}
+              </button>
+            </div>
+            {sortedQuestions.length > 0 ? (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Question</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedQuestions.map((q, i) => (
+                    <tr key={i}>
+                      <td style={{ whiteSpace: "nowrap" }}>{q.date}</td>
+                      <td>{q.content}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="empty">Aucune question pour cette période</p>
+            )}
+          </div>
+
+          <div className="section">
+            <div className="section-header">
+              <h2>Réponses données aux utilisateurs ({assistantResponses.length})</h2>
+              <button className="sort-btn" onClick={() => setResponsesSortAsc(!responsesSortAsc)}>
+                Trier par date {responsesSortAsc ? "↑ croissant" : "↓ décroissant"}
+              </button>
+            </div>
+            {sortedResponses.length > 0 ? (
               <table>
                 <thead>
                   <tr>
@@ -285,7 +321,7 @@ export default function Stats() {
                   </tr>
                 </thead>
                 <tbody>
-                  {assistantResponses.slice(0, 30).map((r, i) => (
+                  {sortedResponses.map((r, i) => (
                     <tr key={i}>
                       <td style={{ whiteSpace: "nowrap" }}>{r.date}</td>
                       <td>{r.content}</td>
