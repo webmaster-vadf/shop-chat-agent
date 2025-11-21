@@ -7,13 +7,17 @@ import {
   List,
   Link,
   InlineStack,
+  Button,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
+import { useNavigate } from "@remix-run/react";
 
 export default function Index() {
+  const navigate = useNavigate();
+
   return (
     <Page>
-      <TitleBar title="Shop chat agent reference app">
+      <TitleBar title="VADF Chat Assistant">
       </TitleBar>
       <BlockStack gap="500">
         <Layout>
@@ -22,12 +26,15 @@ export default function Index() {
               <BlockStack gap="500">
                 <BlockStack gap="200">
                   <Text as="h2" variant="headingMd">
-                    Congrats on creating a new Shopify app 🎉
+                    Assistant Chat VADF
                   </Text>
                   <Text variant="bodyMd" as="p">
-                    This is a reference app that adds a chat agent on your storefront, which is powered via claude and can connect shopify mcp platform.
+                    L'assistant chat VADF est actif sur votre boutique. Il répond aux questions des clients sur les produits, comptes et commandes.
                   </Text>
                 </BlockStack>
+                <Button variant="primary" onClick={() => navigate("/app/dashboard")}>
+                  Voir le Dashboard
+                </Button>
               </BlockStack>
             </Card>
           </Layout.Section>

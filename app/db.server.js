@@ -253,3 +253,102 @@ export async function getCustomerAccountUrl(conversationId) {
     return null;
   }
 }
+
+/**
+ * Get chat statistics for reporting
+ * @param {Date} startDate - Start date for the report
+ * @param {Date} endDate - End date for the report
+ * @returns {Promise<Object>} - Statistics object
+ */
+export async function getChatStats(startDate, endDate) {
+  try {
+    // Total conversations in period
+    const conversations = await prisma.conversation.findMany({
+      where: {
+        createdAt: {
+          gte: startDate,
+          lte: endDate
+        }
+      },
+      include: {
+        messages: true
+      }
+    });
+
+    // Total messages
+    const totalMessages = await prisma.message.count({
+      where: {
+        createdAt: {
+          gte: startDate,
+          lte: endDate
+        }
+      }
+    });
+
+    // User messages only
+    const userMessages = await prisma.message.count({
+      where: {
+        createdAt: {
+          gte: startDate,
+          lte: endDate
+        },
+        role: 'user'
+      }
+    });
+
+    // Get all user messages for analysis
+    const allUserMessages = await prisma.message.findMany({
+      where: {
+        createdAt: {
+          gte: startDate,
+          lte: endDate
+        },
+        role: 'user'
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return {
+      totalConversations: conversations.length,
+      totalMessages,
+      userMessages,
+      assistantMessages: totalMessages - userMessages,
+      conversations,
+      allUserMessages
+    };
+  } catch (error) {
+    console.error('Error getting chat stats:', error);
+    return {
+      totalConversations: 0,
+      totalMessages: 0,
+      userMessages: 0,
+      assistantMessages: 0,
+      conversations: [],
+      allUserMessages: []
+    };
+  }
+}
+
+/**
+ * Get recent conversations with messages
+ * @param {number} limit - Number of conversations to retrieve
+ * @returns {Promise<Array>} - Array of conversations with messages
+ */
+export async function getRecentConversations(limit = 50) {
+  try {
+    const conversations = await prisma.conversation.findMany({
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' }
+        }
+      }
+    });
+
+    return conversations;
+  } catch (error) {
+    console.error('Error getting recent conversations:', error);
+    return [];
+  }
+}
