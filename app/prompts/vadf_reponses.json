@@ -8,7 +8,7 @@
   "categories": {
     "compte": ["creation_compte", "activation_compte", "mot_de_passe_oublie", "mise_a_jour_infos_entreprise"],
     "support": ["escalade_support", "erreur_generique", "faq"],
-    "produit": ["origine_produit", "personnalisation", "b2b_only", "decouvrir_produits", "commander_produits", "reliquat", "stock_indisponible", "devis", "tarifs", "fiches_techniques", "materiaux", "fabrication"],
+    "produit": ["origine_produit", "personnalisation", "b2b_only", "decouvrir_produits", "commander_produits", "reliquat", "stock_indisponible", "devis", "tarifs", "fiches_techniques", "photos_produits", "materiaux", "fabrication"],
     "general": ["salutation", "remerciement", "au_revoir"]
   },
   "intents": {
@@ -263,6 +263,24 @@
       "responses": [
         {
           "text": "Les fiches techniques, guides d'impression et visuels sont accessibles depuis votre espace client professionnel.\n\nVous y trouverez :\n📄 Fiches techniques détaillées\n🎨 Guides d'impression pour personnalisation\n🖼️ Visuels haute résolution\n\n👉 Connectez-vous : https://vadf.fr/account/login",
+          "conditions": []
+        }
+      ]
+    },
+    "photos_produits": {
+      "description": "Accéder aux photos et visuels des produits.",
+      "examples": [
+        "Où trouver les photos produits",
+        "Photos des produits",
+        "Visuels produits",
+        "Images des articles",
+        "Où sont les photos",
+        "Télécharger les visuels",
+        "Photos haute résolution"
+      ],
+      "responses": [
+        {
+          "text": "Les fiches techniques, guides d'impression et quelques visuels sont accessibles depuis votre espace client professionnel.\n\n👉 Connectez-vous : https://vadf.fr/account/login",
           "conditions": []
         }
       ]

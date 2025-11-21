@@ -65,7 +65,8 @@ class VADFResponseManager {
       stock_indisponible: ["indisponible", "non disponible", "quand disponible", "trouve pas articles", "article introuvable"],
       devis: ["devis", "prix mesure", "devis personnalisé", "obtenir devis", "demander devis"],
       tarifs: ["voir tarifs", "voir prix", "tarifs produits", "prix articles", "combien coûte"],
-      fiches_techniques: ["fiche technique", "photos produits", "documentation", "caractéristiques", "spécifications", "guide impression"]
+      photos_produits: ["photos produits", "photo produit", "visuels produits", "images produits", "où trouver les photos", "télécharger visuels", "photos haute résolution"],
+      fiches_techniques: ["fiche technique", "documentation", "caractéristiques", "spécifications", "guide impression"]
     };
 
     // Intents génériques (à renvoyer vers MCP si détectés)
