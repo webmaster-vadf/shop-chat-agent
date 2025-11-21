@@ -258,11 +258,13 @@
         "Caractéristiques produits",
         "Spécifications techniques",
         "Documentation produits",
-        "Guide d'impression"
+        "Guide d'impression",
+        "Visuels produits",
+        "Photos des articles"
       ],
       "responses": [
         {
-          "text": "Les fiches techniques, guides d'impression et visuels sont accessibles depuis votre espace client professionnel.\n\nVous y trouverez :\n📄 Fiches techniques détaillées\n🎨 Guides d'impression pour personnalisation\n🖼️ Visuels haute résolution\n\n👉 Connectez-vous : https://vadf.fr/account/login",
+          "text": "Les fiches techniques, guides d'impression et visuels sont accessibles depuis votre espace client professionnel.\n\nVous y trouverez :\n📄 Fiches techniques détaillées\n🎨 Guides d'impression pour personnalisation\n🖼️ Visuels et photos optimisés pour le web\n\n👉 Connectez-vous : https://vadf.fr/account/login",
           "conditions": []
         }
       ]
@@ -276,7 +278,7 @@
         "Images des articles",
         "Où sont les photos",
         "Télécharger les visuels",
-        "Photos haute résolution"
+        "Visuels et photos optimisés pour le web"
       ],
       "responses": [
         {

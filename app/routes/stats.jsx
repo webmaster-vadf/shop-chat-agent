@@ -92,6 +92,32 @@ export const loader = async ({ request }) => {
     }
   });
 
+  // Extract plain text from assistant messages
+  const assistantResponses = stats.allAssistantMessages
+    .map((msg) => {
+      let content = msg.content;
+      try {
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) {
+          const textBlocks = parsed.filter((b) => b.type === "text");
+          if (textBlocks.length > 0) {
+            content = textBlocks.map((b) => b.text).join(" ");
+          } else {
+            return null;
+          }
+        }
+      } catch {
+        // Not JSON, use as-is
+      }
+      return {
+        content: content.substring(0, 300),
+        date: new Date(msg.createdAt).toLocaleString("fr-FR"),
+        conversationId: msg.conversationId,
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 50);
+
   return json({
     stats: {
       totalConversations: stats.totalConversations,
@@ -100,6 +126,7 @@ export const loader = async ({ request }) => {
       assistantMessages: stats.assistantMessages,
     },
     userQuestions,
+    assistantResponses,
     intentCounts,
     recentConversations: recentConversations.map((c) => ({
       id: c.id,
@@ -128,7 +155,7 @@ export const loader = async ({ request }) => {
 };
 
 export default function Stats() {
-  const { stats, userQuestions, intentCounts, recentConversations, period } = useLoaderData();
+  const { stats, userQuestions, assistantResponses, intentCounts, recentConversations, period } = useLoaderData();
 
   const intentRows = Object.entries(intentCounts)
     .filter(([, count]) => count > 0)
@@ -248,26 +275,26 @@ export default function Stats() {
           </div>
 
           <div className="section">
-            <h2>Questions récentes des utilisateurs</h2>
-            {userQuestions.length > 0 ? (
+            <h2>Réponses données aux utilisateurs</h2>
+            {assistantResponses.length > 0 ? (
               <table>
                 <thead>
                   <tr>
                     <th>Date</th>
-                    <th>Question</th>
+                    <th>Réponse</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {userQuestions.slice(0, 30).map((q, i) => (
+                  {assistantResponses.slice(0, 30).map((r, i) => (
                     <tr key={i}>
-                      <td style={{ whiteSpace: "nowrap" }}>{q.date}</td>
-                      <td>{q.content}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>{r.date}</td>
+                      <td>{r.content}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
-              <p className="empty">Aucune question pour cette période</p>
+              <p className="empty">Aucune réponse pour cette période</p>
             )}
           </div>
         </div>

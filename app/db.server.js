@@ -308,13 +308,26 @@ export async function getChatStats(startDate, endDate) {
       orderBy: { createdAt: 'desc' }
     });
 
+    // Get all assistant messages for display
+    const allAssistantMessages = await prisma.message.findMany({
+      where: {
+        createdAt: {
+          gte: startDate,
+          lte: endDate
+        },
+        role: 'assistant'
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
     return {
       totalConversations: conversations.length,
       totalMessages,
       userMessages,
       assistantMessages: totalMessages - userMessages,
       conversations,
-      allUserMessages
+      allUserMessages,
+      allAssistantMessages
     };
   } catch (error) {
     console.error('Error getting chat stats:', error);
@@ -324,7 +337,8 @@ export async function getChatStats(startDate, endDate) {
       userMessages: 0,
       assistantMessages: 0,
       conversations: [],
-      allUserMessages: []
+      allUserMessages: [],
+      allAssistantMessages: []
     };
   }
 }

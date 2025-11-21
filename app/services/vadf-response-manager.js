@@ -65,7 +65,7 @@ class VADFResponseManager {
       stock_indisponible: ["indisponible", "non disponible", "quand disponible", "trouve pas articles", "article introuvable"],
       devis: ["devis", "prix mesure", "devis personnalisé", "obtenir devis", "demander devis"],
       tarifs: ["voir tarifs", "voir prix", "tarifs produits", "prix articles", "combien coûte"],
-      photos_produits: ["photos produits", "photo produit", "visuels produits", "images produits", "où trouver les photos", "télécharger visuels", "photos haute résolution"],
+      photos_produits: ["photos produits", "photo produit", "visuels produits", "images produits", "où trouver les photos", "télécharger visuels", "visuels et photos optimisés"],
       fiches_techniques: ["fiche technique", "documentation", "caractéristiques", "spécifications", "guide impression"]
     };
 
