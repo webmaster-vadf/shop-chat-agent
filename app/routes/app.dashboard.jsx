@@ -7,100 +7,154 @@ import {
   BlockStack,
   Text,
   DataTable,
-  Badge,
-  InlineStack,
-  Box,
-  Divider,
-  Select,
-  Button,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
-import { useState } from "react";
 import { getChatStats, getRecentConversations } from "../db.server";
 import { authenticate } from "../shopify.server";
+import prisma from "../db.server";
 
-export const loader = async ({ request }) => {
-  await authenticate.admin(request);
+// ============================================================================
+// CONSTANTS
+// ============================================================================
 
-  const url = new URL(request.url);
-  const period = url.searchParams.get("period") || "week";
+const PERIODS = {
+  day: 1,
+  week: 7,
+  month: 30,
+  all: Infinity,
+};
 
-  // Calculate date range
+const LIMITS = {
+  MAX_QUESTIONS: 50,
+  MAX_CONTENT_LENGTH: 200,
+  MAX_ASSISTANT_CONTENT: 300,
+  MAX_PREVIEW_LENGTH: 100,
+  MAX_CONVERSATIONS_DISPLAY: 10,
+  MAX_QUESTIONS_DISPLAY: 30,
+};
+
+const INTENT_KEYWORDS = {
+  "Compte / Activation": ["activer", "activation", "compte", "créer compte", "inscription"],
+  "Mot de passe": ["mot de passe", "password", "oublié", "réinitialiser"],
+  "Produits": ["produit", "catalogue", "cherche", "prix", "stock"],
+  "Photos / Visuels": ["photo", "visuel", "image", "fiche technique"],
+  "Commande": ["commander", "commande", "panier", "acheter"],
+  "Devis": ["devis"],
+  "Support": ["problème", "aide", "support", "erreur"],
+  "Salutation": ["bonjour", "salut", "hello"],
+};
+
+// ============================================================================
+// HELPER FUNCTIONS - Date & Content Processing
+// ============================================================================
+
+function calculateDateRange(period) {
   const endDate = new Date();
-  let startDate = new Date();
+  const startDate = new Date();
 
-  switch (period) {
-    case "day":
-      startDate.setDate(startDate.getDate() - 1);
-      break;
-    case "week":
-      startDate.setDate(startDate.getDate() - 7);
-      break;
-    case "month":
-      startDate.setMonth(startDate.getMonth() - 1);
-      break;
-    case "all":
-      startDate = new Date(0);
-      break;
-    default:
-      startDate.setDate(startDate.getDate() - 7);
+  const days = PERIODS[period] || PERIODS.week;
+  if (days === Infinity) {
+    return { startDate: new Date(0), endDate };
   }
 
-  const stats = await getChatStats(startDate, endDate);
-  const recentConversations = await getRecentConversations(30);
+  startDate.setDate(startDate.getDate() - days);
+  return { startDate, endDate };
+}
 
-  // Extract plain text from user messages
-  const userQuestions = stats.allUserMessages
-    .map((msg) => {
-      let content = msg.content;
-      // Try to parse JSON content
-      try {
-        const parsed = JSON.parse(content);
-        if (Array.isArray(parsed)) {
-          // Filter out tool_result messages
-          const textBlocks = parsed.filter((b) => b.type === "text");
-          if (textBlocks.length > 0) {
-            content = textBlocks.map((b) => b.text).join(" ");
-          } else {
-            return null; // Skip tool_result only messages
-          }
-        }
-      } catch {
-        // Not JSON, use as-is
-      }
-      return {
-        content: content.substring(0, 200),
-        date: new Date(msg.createdAt).toLocaleString("fr-FR"),
-        conversationId: msg.conversationId,
-      };
-    })
-    .filter(Boolean)
-    .slice(0, 50);
+function extractTextContent(content) {
+  try {
+    const parsed = JSON.parse(content);
+    if (Array.isArray(parsed)) {
+      const textBlocks = parsed.filter((b) => b.type === "text");
+      return textBlocks.length > 0 ? textBlocks.map((b) => b.text).join(" ") : null;
+    }
+    return typeof parsed === "string" ? parsed : content;
+  } catch {
+    return content;
+  }
+}
 
-  // Analyze intents from messages
-  const intentKeywords = {
-    "Compte / Activation": ["activer", "activation", "compte", "créer compte", "inscription"],
-    "Mot de passe": ["mot de passe", "password", "oublié", "réinitialiser"],
-    "Produits": ["produit", "catalogue", "cherche", "prix", "stock"],
-    "Photos / Visuels": ["photo", "visuel", "image", "fiche technique"],
-    "Commande": ["commander", "commande", "panier", "acheter"],
-    "Devis": ["devis"],
-    "Support": ["problème", "aide", "support", "erreur"],
-    "Salutation": ["bonjour", "salut", "hello"],
-  };
+function formatDate(date) {
+  return new Date(date).toLocaleString("fr-FR");
+}
 
-  const intentCounts = {};
-  Object.keys(intentKeywords).forEach((intent) => {
-    intentCounts[intent] = 0;
+// ============================================================================
+// HELPER FUNCTIONS - Database Queries
+// ============================================================================
+
+async function getAssistantResponse(conversationId, userMessageDate) {
+  const response = await prisma.message.findFirst({
+    where: {
+      conversationId,
+      role: "assistant",
+      createdAt: { gt: userMessageDate },
+    },
+    orderBy: { createdAt: "asc" },
   });
-  intentCounts["Autre"] = 0;
 
-  userQuestions.forEach((q) => {
-    if (!q) return;
+  if (!response) return "-";
+
+  const content = extractTextContent(response.content);
+  return content ? content.substring(0, LIMITS.MAX_ASSISTANT_CONTENT) : "-";
+}
+
+// ============================================================================
+// HELPER FUNCTIONS - Data Formatting
+// ============================================================================
+
+async function formatUserQuestion(msg) {
+  const content = extractTextContent(msg.content);
+  if (!content) return null;
+
+  const assistantResponse = await getAssistantResponse(msg.conversationId, msg.createdAt);
+
+  return {
+    content: content.substring(0, LIMITS.MAX_CONTENT_LENGTH),
+    date: formatDate(msg.createdAt),
+    conversationId: msg.conversationId,
+    assistantResponse,
+  };
+}
+
+function formatConversationPreview(conversation) {
+  const userMessages = conversation.messages
+    .filter((m) => m.role === "user")
+    .map((m) => extractTextContent(m.content))
+    .filter(Boolean);
+
+  const assistantMessages = conversation.messages
+    .filter((m) => m.role === "assistant")
+    .map((m) => extractTextContent(m.content))
+    .filter(Boolean);
+
+  const userPreview = userMessages.join(" | ");
+  const assistantPreview = assistantMessages.join(" | ");
+
+  return {
+    id: conversation.id,
+    messageCount: conversation.messages.length,
+    createdAt: formatDate(conversation.createdAt),
+    updatedAt: formatDate(conversation.updatedAt),
+    preview: userPreview.substring(0, LIMITS.MAX_PREVIEW_LENGTH) || "-",
+    assistantPreview: assistantPreview.substring(0, LIMITS.MAX_PREVIEW_LENGTH) || "-",
+  };
+}
+
+// ============================================================================
+// HELPER FUNCTIONS - Intent Analysis
+// ============================================================================
+
+function analyzeIntents(questions) {
+  const intentCounts = Object.keys(INTENT_KEYWORDS).reduce((acc, key) => {
+    acc[key] = 0;
+    return acc;
+  }, { "Autre": 0 });
+
+  questions.forEach((q) => {
     const msgLower = q.content.toLowerCase();
     let matched = false;
 
-    for (const [intent, keywords] of Object.entries(intentKeywords)) {
+    for (const [intent, keywords] of Object.entries(INTENT_KEYWORDS)) {
       if (keywords.some((k) => msgLower.includes(k))) {
         intentCounts[intent]++;
         matched = true;
@@ -108,10 +162,37 @@ export const loader = async ({ request }) => {
       }
     }
 
-    if (!matched) {
-      intentCounts["Autre"]++;
-    }
+    if (!matched) intentCounts["Autre"]++;
   });
+
+  return intentCounts;
+}
+
+// ============================================================================
+// LOADER
+// ============================================================================
+
+export const loader = async ({ request }) => {
+  await authenticate.admin(request);
+
+  const url = new URL(request.url);
+  const period = url.searchParams.get("period") || "week";
+
+  const { startDate, endDate } = calculateDateRange(period);
+
+  // Parallel data fetching
+  const [stats, recentConversations] = await Promise.all([
+    getChatStats(startDate, endDate),
+    getRecentConversations(30),
+  ]);
+
+  // Process user questions with assistant responses
+  const userQuestions = await Promise.all(
+    stats.allUserMessages.slice(0, LIMITS.MAX_QUESTIONS).map(formatUserQuestion)
+  );
+
+  const validQuestions = userQuestions.filter(Boolean);
+  const intentCounts = analyzeIntents(validQuestions);
 
   return json({
     stats: {
@@ -120,204 +201,150 @@ export const loader = async ({ request }) => {
       userMessages: stats.userMessages,
       assistantMessages: stats.assistantMessages,
     },
-    userQuestions,
+    userQuestions: validQuestions,
     intentCounts,
-    recentConversations: recentConversations.map((c) => ({
-      id: c.id,
-      messageCount: c.messages.length,
-      createdAt: new Date(c.createdAt).toLocaleString("fr-FR"),
-      updatedAt: new Date(c.updatedAt).toLocaleString("fr-FR"),
-      preview: c.messages
-        .filter((m) => m.role === "user")
-        .map((m) => {
-          try {
-            const parsed = JSON.parse(m.content);
-            if (Array.isArray(parsed)) {
-              const textBlocks = parsed.filter((b) => b.type === "text");
-              return textBlocks.map((b) => b.text).join(" ");
-            }
-            return m.content;
-          } catch {
-            return m.content;
-          }
-        })
-        .join(" | ")
-        .substring(0, 100),
-    })),
+    recentConversations: recentConversations.map(formatConversationPreview),
     period,
   });
 };
 
-export default function Dashboard() {
-  const { stats, userQuestions, intentCounts, recentConversations, period } =
-    useLoaderData();
-  const [selectedPeriod, setSelectedPeriod] = useState(period);
+// ============================================================================
+// UI COMPONENTS
+// ============================================================================
 
-  const handlePeriodChange = (value) => {
-    setSelectedPeriod(value);
-    window.location.href = `/app/dashboard?period=${value}`;
-  };
+function StatCard({ title, value }) {
+  return (
+    <Card>
+      <BlockStack gap="200">
+        <Text variant="headingSm" as="h3">
+          {title}
+        </Text>
+        <Text variant="heading2xl" as="p">
+          {value}
+        </Text>
+      </BlockStack>
+    </Card>
+  );
+}
 
-  // Prepare intent data for display
+function IntentAnalysisCard({ intentCounts, totalUserMessages }) {
   const intentRows = Object.entries(intentCounts)
     .filter(([, count]) => count > 0)
     .sort((a, b) => b[1] - a[1])
     .map(([intent, count]) => [
       intent,
       count,
-      `${Math.round((count / stats.userMessages) * 100) || 0}%`,
+      `${Math.round((count / totalUserMessages) * 100) || 0}%`,
     ]);
 
-  // Prepare questions table
-  const questionRows = userQuestions.map((q) => [q.date, q.content]);
+  const hasData = intentRows.length > 0;
 
-  // Prepare conversations table
-  const conversationRows = recentConversations.map((c) => [
-    c.createdAt,
-    c.messageCount,
-    c.preview || "-",
-  ]);
+  return (
+    <Card>
+      <BlockStack gap="400">
+        <Text variant="headingMd" as="h2">
+          Analyse des intentions
+        </Text>
+        {hasData ? (
+          <DataTable
+            columnContentTypes={["text", "numeric", "text"]}
+            headings={["Catégorie", "Nombre", "Pourcentage"]}
+            rows={intentRows}
+          />
+        ) : (
+          <Text as="p" tone="subdued">
+            Aucune donnée pour cette période
+          </Text>
+        )}
+      </BlockStack>
+    </Card>
+  );
+}
+
+function ConversationsCard({ conversations, maxDisplay = LIMITS.MAX_CONVERSATIONS_DISPLAY }) {
+  const conversationRows = conversations
+    .slice(0, maxDisplay)
+    .map((c) => [c.createdAt, c.messageCount, c.preview, c.assistantPreview]);
+
+  const hasConversations = conversationRows.length > 0;
+
+  return (
+    <Card>
+      <BlockStack gap="400">
+        <Text variant="headingMd" as="h2">
+          Conversations récentes
+        </Text>
+        {hasConversations ? (
+          <DataTable
+            columnContentTypes={["text", "numeric", "text", "text"]}
+            headings={["Date", "Messages", "Aperçu", "Réponse du chatbot"]}
+            rows={conversationRows}
+          />
+        ) : (
+          <Text as="p" tone="subdued">
+            Aucune conversation
+          </Text>
+        )}
+      </BlockStack>
+    </Card>
+  );
+}
+
+function QuestionsCard({ questions, maxDisplay = LIMITS.MAX_QUESTIONS_DISPLAY }) {
+  const questionRows = questions
+    .slice(0, maxDisplay)
+    .map((q) => [q.date, q.content, q.assistantResponse]);
+
+  const hasQuestions = questionRows.length > 0;
+
+  return (
+    <Card>
+      <BlockStack gap="400">
+        <Text variant="headingMd" as="h2">
+          Questions récentes des utilisateurs
+        </Text>
+        {hasQuestions ? (
+          <DataTable
+            columnContentTypes={["text", "text", "text"]}
+            headings={["Date", "Question", "Réponse du chatbot"]}
+            rows={questionRows}
+          />
+        ) : (
+          <Text as="p" tone="subdued">
+            Aucune question pour cette période
+          </Text>
+        )}
+      </BlockStack>
+    </Card>
+  );
+}
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
+export default function Dashboard() {
+  const { stats, userQuestions, intentCounts, recentConversations } = useLoaderData();
 
   return (
     <Page>
       <TitleBar title="Dashboard Chat VADF" />
-      <BlockStack gap="500">
-        {/* Period selector */}
-        <Card>
-          <InlineStack align="space-between" blockAlign="center">
-            <Text variant="headingMd" as="h2">
-              Statistiques du chat
-            </Text>
-            <Select
-              label="Période"
-              labelInline
-              options={[
-                { label: "Dernières 24h", value: "day" },
-                { label: "7 derniers jours", value: "week" },
-                { label: "30 derniers jours", value: "month" },
-                { label: "Tout", value: "all" },
-              ]}
-              value={selectedPeriod}
-              onChange={handlePeriodChange}
+      <BlockStack gap="500">  
+        {/* Intent analysis and conversations */}
+        <Layout>
+          <Layout.Section>
+            <IntentAnalysisCard
+              intentCounts={intentCounts}
+              totalUserMessages={stats.userMessages}
             />
-          </InlineStack>
-        </Card>
-
-        {/* Stats cards */}
-        <Layout>
-          <Layout.Section variant="oneQuarter">
-            <Card>
-              <BlockStack gap="200">
-                <Text variant="headingSm" as="h3">
-                  Conversations
-                </Text>
-                <Text variant="heading2xl" as="p">
-                  {stats.totalConversations}
-                </Text>
-              </BlockStack>
-            </Card>
           </Layout.Section>
-          <Layout.Section variant="oneQuarter">
-            <Card>
-              <BlockStack gap="200">
-                <Text variant="headingSm" as="h3">
-                  Messages totaux
-                </Text>
-                <Text variant="heading2xl" as="p">
-                  {stats.totalMessages}
-                </Text>
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-          <Layout.Section variant="oneQuarter">
-            <Card>
-              <BlockStack gap="200">
-                <Text variant="headingSm" as="h3">
-                  Questions utilisateurs
-                </Text>
-                <Text variant="heading2xl" as="p">
-                  {stats.userMessages}
-                </Text>
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-          <Layout.Section variant="oneQuarter">
-            <Card>
-              <BlockStack gap="200">
-                <Text variant="headingSm" as="h3">
-                  Réponses assistant
-                </Text>
-                <Text variant="heading2xl" as="p">
-                  {stats.assistantMessages}
-                </Text>
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-        </Layout>
-
-        {/* Intent analysis */}
-        <Layout>
-          <Layout.Section variant="oneHalf">
-            <Card>
-              <BlockStack gap="400">
-                <Text variant="headingMd" as="h2">
-                  Analyse des intentions
-                </Text>
-                {intentRows.length > 0 ? (
-                  <DataTable
-                    columnContentTypes={["text", "numeric", "text"]}
-                    headings={["Catégorie", "Nombre", "Pourcentage"]}
-                    rows={intentRows}
-                  />
-                ) : (
-                  <Text as="p" tone="subdued">
-                    Aucune donnée pour cette période
-                  </Text>
-                )}
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-          <Layout.Section variant="oneHalf">
-            <Card>
-              <BlockStack gap="400">
-                <Text variant="headingMd" as="h2">
-                  Conversations récentes
-                </Text>
-                {conversationRows.length > 0 ? (
-                  <DataTable
-                    columnContentTypes={["text", "numeric", "text"]}
-                    headings={["Date", "Messages", "Aperçu"]}
-                    rows={conversationRows.slice(0, 10)}
-                  />
-                ) : (
-                  <Text as="p" tone="subdued">
-                    Aucune conversation
-                  </Text>
-                )}
-              </BlockStack>
-            </Card>
+          <Layout.Section>
+            <ConversationsCard conversations={recentConversations} />
           </Layout.Section>
         </Layout>
 
         {/* Recent questions */}
-        <Card>
-          <BlockStack gap="400">
-            <Text variant="headingMd" as="h2">
-              Questions récentes des utilisateurs
-            </Text>
-            {questionRows.length > 0 ? (
-              <DataTable
-                columnContentTypes={["text", "text"]}
-                headings={["Date", "Question"]}
-                rows={questionRows.slice(0, 30)}
-              />
-            ) : (
-              <Text as="p" tone="subdued">
-                Aucune question pour cette période
-              </Text>
-            )}
-          </BlockStack>
-        </Card>
+        <QuestionsCard questions={userQuestions} />
       </BlockStack>
     </Page>
   );
