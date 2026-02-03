@@ -81,9 +81,9 @@ export const action = async ({ request }) => {
 // ============================================================================
 
 const TRIGGER_TYPE_LABELS = {
-  cart_abandoned: "Panier abandonn\u00e9",
+  cart_abandoned: "Panier abandonné",
   welcome: "Bienvenue",
-  order_update: "Mise \u00e0 jour commande",
+  order_update: "Mise à jour commande",
   inactive_reminder: "Relance inactif",
 };
 
@@ -104,19 +104,19 @@ function StatsHeader({ stats }) {
       </Card>
       <Card>
         <BlockStack gap="100">
-          <Text variant="headingSm" as="h3" tone="subdued">Envoy\u00e9s</Text>
+          <Text variant="headingSm" as="h3" tone="subdued">Envoyés</Text>
           <Text variant="heading2xl" as="p">{stats.sent}</Text>
         </BlockStack>
       </Card>
       <Card>
         <BlockStack gap="100">
-          <Text variant="headingSm" as="h3" tone="subdued">D\u00e9livr\u00e9s</Text>
+          <Text variant="headingSm" as="h3" tone="subdued">Délivrés</Text>
           <Text variant="heading2xl" as="p" tone="success">{stats.delivered}</Text>
         </BlockStack>
       </Card>
       <Card>
         <BlockStack gap="100">
-          <Text variant="headingSm" as="h3" tone="subdued">\u00c9chou\u00e9s</Text>
+          <Text variant="headingSm" as="h3" tone="subdued">Échoués</Text>
           <Text variant="heading2xl" as="p" tone="critical">{stats.failed}</Text>
         </BlockStack>
       </Card>
@@ -182,11 +182,11 @@ function TemplateEditor({ template, onSave, onDelete }) {
         />
 
         <TextField
-          label="D\u00e9lai (minutes)"
+          label="Délai (minutes)"
           value={delay}
           onChange={setDelay}
           type="number"
-          helpText="Temps d'attente avant envoi (ex: 30 min pour panier abandonn\u00e9)"
+          helpText="Temps d'attente avant envoi (ex: 30 min pour panier abandonné)"
           autoComplete="off"
         />
 
@@ -208,8 +208,8 @@ function RecentMessagesTable({ messages }) {
     return (
       <Card>
         <BlockStack gap="300">
-          <Text variant="headingMd" as="h2">Messages r\u00e9cents</Text>
-          <Text as="p" tone="subdued">Aucun message proactif envoy\u00e9</Text>
+          <Text variant="headingMd" as="h2">Messages récents</Text>
+          <Text as="p" tone="subdued">Aucun message proactif envoyé</Text>
         </BlockStack>
       </Card>
     );
@@ -226,7 +226,7 @@ function RecentMessagesTable({ messages }) {
   return (
     <Card>
       <BlockStack gap="400">
-        <Text variant="headingMd" as="h2">Messages r\u00e9cents</Text>
+        <Text variant="headingMd" as="h2">Messages récents</Text>
         <DataTable
           columnContentTypes={["text", "text", "text", "text", "text"]}
           headings={["Date", "Type", "Email", "Statut", "Contenu"]}
@@ -249,8 +249,8 @@ export default function ProactiveAdmin() {
       <TitleBar title="Messagerie Proactive" />
       <BlockStack gap="500">
         <Banner tone="info">
-          Les messages proactifs sont envoy\u00e9s automatiquement aux clients
-          lors d'\u00e9v\u00e9nements cl\u00e9s : panier abandonn\u00e9, inscription, mise \u00e0 jour
+          Les messages proactifs sont envoyés automatiquement aux clients
+          lors d'événements clés : panier abandonné, inscription, mise à jour
           de commande. Configurez les templates ci-dessous.
         </Banner>
 

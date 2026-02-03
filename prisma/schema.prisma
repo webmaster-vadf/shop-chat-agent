@@ -89,6 +89,7 @@ model ConversationContext {
   companyName       String?
   accountStatus     String?  // "pro", "not_pro", "unknown"
   lastIntent        String?
+  lastAgentType     String?  // "sales", "support", "order"
   extractedEntities String?  // JSON blob of entities extracted across the conversation
   messageCount      Int      @default(0)
   createdAt         DateTime @default(now())

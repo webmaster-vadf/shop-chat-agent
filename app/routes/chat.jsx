@@ -204,7 +204,6 @@ async function handleChatSession({
 
     // Préparer l'état de la conversation
     let conversationHistory = [];
-    let productsToDisplay = [];
 
     // Track session start event (fire-and-forget)
     trackEvent(conversationId, shopId, 'chat_session_started', { promptType });
@@ -262,6 +261,7 @@ async function handleChatSession({
     }
 
     // --- INTÉGRATION VADF AVEC FALLBACK MCP ---
+    let vadfIntent = undefined; // hoisted for orchestrator access
     if (promptType === 'vadfAssistant' || promptType === 'vadfAutonomousAgent') {
       console.log('\n\n════════════════════════════════════════════════════════');
       console.log('🚀🚀🚀 [CHAT] VADF MODE ACTIVATED 🚀🚀🚀');
@@ -275,7 +275,7 @@ async function handleChatSession({
 
       // Classification IA avec fallback regex
       const classification = await vadfManager.classifyWithAI(userMessage, conversationHistory);
-      const vadfIntent = classification.intent;
+      vadfIntent = classification.intent;
       const confidence = classification.confidence;
       const extractedEntities = classification.entities || {};
 
@@ -437,195 +437,56 @@ async function handleChatSession({
     }
     // --- FIN INTÉGRATION VADF ---
 
-    // Sinon, flux Claude classique
+    // --- ORCHESTRATION MULTI-AGENTS ---
+    const { AgentOrchestrator } = await import('../agents/orchestrator.server.js');
+    const orchestrator = new AgentOrchestrator();
+
+    const { agent, routingReason } = orchestrator.route(userMessage, vadfIntent, conversationContext);
+
     console.log('\n\n════════════════════════════════════════════════════════');
-    console.log('🤖 [CLAUDE] Starting Claude conversation flow');
-    console.log('📊 [CLAUDE] Conversation history length:', conversationHistory.length);
-    console.log('🛠️ [CLAUDE] Available tools:', mcpClient.tools?.length || 0);
-    console.log('⚙️ [CLAUDE] Prompt type:', promptType);
+    console.log(`🤖 [AGENT] Routed to: ${agent.name} (reason: ${routingReason})`);
+    console.log('📊 [AGENT] Conversation history length:', conversationHistory.length);
+    console.log('🛠️ [AGENT] Total tools available:', mcpClient.tools?.length || 0);
     console.log('════════════════════════════════════════════════════════\n');
 
-    let finalMessage = { role: 'user', content: userMessage };
-    let turnCount = 0;
-    const MAX_TURNS = 5;
-    const SESSION_TIMEOUT = 30000; // 30 seconds total
-    const sessionStart = Date.now();
+    // Track agent routing
+    trackEvent(conversationId, shopId, 'agent_routed', {
+      agentType: agent.name,
+      routingReason
+    });
 
-    while (finalMessage.stop_reason !== "end_turn" && turnCount < MAX_TURNS) {
-      // Check session timeout
-      if (Date.now() - sessionStart > SESSION_TIMEOUT) {
-        console.warn('[CLAUDE] Session timeout reached, ending conversation');
-        stream.sendMessage({
-          type: 'chunk',
-          chunk: '\n\n_La session a mis trop de temps. Veuillez reformuler votre question._'
-        });
-        break;
-      }
+    // Update context with agent type
+    updateConversationContext(conversationId, {
+      lastAgentType: agent.name
+    }).catch(e => console.warn('[SESSION] Agent type update failed:', e.message));
 
-      turnCount++;
-      console.log(`\n🔄 [CLAUDE] Starting conversation turn ${turnCount}/${MAX_TURNS}`);
-
-      try {
-      finalMessage = await claudeService.streamConversation(
-        {
-          messages: conversationHistory,
-          promptType,
-          tools: mcpClient.tools,
-          conversationContext
-        },
-        {
-          onText: (textDelta) => {
-            console.log('📝 [CLAUDE] Text delta received (length:', textDelta?.length || 0, ')');
-            stream.sendMessage({
-              type: 'chunk',
-              chunk: textDelta
-            });
-          },
-          onMessage: (message) => {
-            console.log('✅ [CLAUDE] Message completed');
-            console.log('   - Role:', message.role);
-            console.log('   - Content type:', Array.isArray(message.content) ? 'array' : typeof message.content);
-            console.log('   - Content items:', Array.isArray(message.content) ? message.content.length : 'N/A');
-            if (Array.isArray(message.content)) {
-              message.content.forEach((item, idx) => {
-                console.log(`   - Content[${idx}]:`, item.type);
-              });
-            }
-
-            conversationHistory.push({
-              role: message.role,
-              content: message.content
-            });
-
-            console.log('💾 [CLAUDE] Saving assistant message to database');
-            saveMessage(conversationId, message.role, JSON.stringify(message.content))
-              .catch((error) => {
-                console.error("❌ [CLAUDE] Error saving message to database:", error);
-              });
-
-            console.log('📤 [CLAUDE] Sending message_complete event to client');
-            stream.sendMessage({ type: 'message_complete' });
-          },
-          onToolUse: async (content) => {
-            const toolName = content.name;
-            const toolArgs = content.input;
-            const toolUseId = content.id;
-
-            // Track tool usage
-            trackEvent(conversationId, shopId, 'tool_used', {
-              toolName,
-              argsPreview: JSON.stringify(toolArgs).substring(0, 200)
-            });
-
-            console.log('\n🔧 [TOOL] Tool use detected');
-            console.log('   - Tool name:', toolName);
-            console.log('   - Tool ID:', toolUseId);
-            console.log('   - Arguments:', JSON.stringify(toolArgs, null, 2));
-
-            const toolUseMessage = `Calling tool: ${toolName} with arguments: ${JSON.stringify(toolArgs)}`;
-            stream.sendMessage({
-              type: 'tool_use',
-              tool_use_message: toolUseMessage
-            });
-
-            console.log('⚙️ [TOOL] Calling MCP tool:', toolName);
-            const toolUseResponse = await mcpClient.callTool(toolName, toolArgs);
-
-            console.log('📥 [TOOL] Tool response received');
-            console.log('   - Has error:', !!toolUseResponse.error);
-            if (toolUseResponse.error) {
-              console.log('   - Error code:', toolUseResponse.error.code);
-              console.log('   - Error message:', toolUseResponse.error.message);
-            } else {
-              console.log('   - Response type:', typeof toolUseResponse.result);
-            }
-
-            if (toolUseResponse.error) {
-              console.log('❌ [TOOL] Handling tool error');
-              await toolService.handleToolError(
-                toolUseResponse,
-                toolName,
-                toolUseId,
-                conversationHistory,
-                stream.sendMessage,
-                conversationId
-              );
-              console.log('✅ [TOOL] Tool error handled');
-            } else {
-              console.log('✅ [TOOL] Handling tool success');
-              await toolService.handleToolSuccess(
-                toolUseResponse,
-                toolName,
-                toolUseId,
-                conversationHistory,
-                productsToDisplay,
-                conversationId
-              );
-              console.log('✅ [TOOL] Tool success handled, products to display:', productsToDisplay.length);
-            }
-            console.log('📤 [TOOL] Sending new_message event');
-            stream.sendMessage({ type: 'new_message' });
-          },
-          onContentBlock: (contentBlock) => {
-            if (contentBlock.type === 'text') {
-              stream.sendMessage({
-                type: 'content_block_complete',
-                content_block: contentBlock
-              });
-            }
-          }
-        }
-      );
-
-      console.log(`✅ [CLAUDE] Conversation turn ${turnCount} completed`);
-      console.log('   - Stop reason:', finalMessage.stop_reason);
-      } catch (turnError) {
-        console.error(`[CLAUDE] Error in turn ${turnCount}:`, turnError.message);
-        trackEvent(conversationId, shopId, 'turn_error', {
-          turn: turnCount,
-          error: turnError.message
-        });
-
-        // Graceful degradation: send partial response and end
-        if (turnError.status === 429 || turnError.status === 529) {
-          stream.sendMessage({
-            type: 'chunk',
-            chunk: '\n\n_Le service est temporairement surchargé. Veuillez réessayer dans quelques instants._'
-          });
-        } else {
-          stream.sendMessage({
-            type: 'chunk',
-            chunk: '\n\n_Une erreur est survenue. Veuillez reformuler votre question ou contacter support@vadf.fr._'
-          });
-        }
-        break; // Exit the while loop
-      }
-    }
+    const { productsToDisplay, turnCount } = await agent.run({
+      claudeService, mcpClient, toolService,
+      conversationHistory, stream, conversationContext,
+      conversationId, shopId
+    });
 
     console.log('\n════════════════════════════════════════════════════════');
-    console.log('🏁 [CLAUDE] Conversation complete');
+    console.log(`🏁 [AGENT:${agent.name}] Conversation complete`);
     console.log('   - Total turns:', turnCount);
-    console.log('   - Final stop reason:', finalMessage.stop_reason);
     console.log('   - Products to display:', productsToDisplay.length);
     console.log('════════════════════════════════════════════════════════\n');
 
-    console.log('📤 [CLAUDE] Sending end_turn event');
     stream.sendMessage({ type: 'end_turn' });
 
     // Track conversation turn completion
-    trackEvent(conversationId, shopId, 'conversation_turn_complete', { turnCount });
+    trackEvent(conversationId, shopId, 'conversation_turn_complete', {
+      turnCount,
+      agentType: agent.name
+    });
 
     if (productsToDisplay.length > 0) {
-      console.log('🛍️ [CLAUDE] Sending product results:', productsToDisplay.length, 'products');
-      productsToDisplay.forEach((product, idx) => {
-        console.log(`   - Product[${idx}]:`, product.title);
-      });
+      console.log(`🛍️ [AGENT:${agent.name}] Sending product results:`, productsToDisplay.length, 'products');
       stream.sendMessage({
         type: 'product_results',
         products: productsToDisplay
       });
 
-      // Track products displayed
       trackEvent(conversationId, shopId, 'products_displayed', {
         count: productsToDisplay.length,
         products: productsToDisplay.map(p => p.title)

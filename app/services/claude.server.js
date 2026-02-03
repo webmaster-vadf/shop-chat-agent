@@ -33,7 +33,8 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     promptType = AppConfig.api.defaultPromptType,
     language = 'fr',
     tools,
-    conversationContext
+    conversationContext,
+    _customSystemPrompt
   }, streamHandlers) => {
     console.log('\n🔵 [CLAUDE-SERVICE] streamConversation called');
     console.log('   - Prompt type:', promptType);
@@ -42,9 +43,10 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     console.log('   - Tools count:', tools?.length || 0);
     console.log('   - Model:', AppConfig.api.defaultModel);
     console.log('   - Max tokens:', AppConfig.api.maxTokens);
+    if (_customSystemPrompt) console.log('   - Using custom system prompt (agent override)');
 
-    // Get system prompt from configuration or use default
-    let systemInstruction = getSystemPrompt(promptType, language);
+    // Get system prompt: use agent override if provided, otherwise from config
+    let systemInstruction = _customSystemPrompt || getSystemPrompt(promptType, language);
 
     // Enrich system prompt with conversation context (memory layer)
     if (conversationContext) {
