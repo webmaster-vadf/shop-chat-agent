@@ -1,17 +1,25 @@
 import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, useNavigate } from "@remix-run/react";
+import { useState, useCallback } from "react";
 import {
   Page,
   Layout,
   Card,
   BlockStack,
+  InlineStack,
   Text,
   DataTable,
+  Tabs,
+  ProgressBar,
+  Button,
+  Select,
+  InlineGrid,
+  Box,
+  Divider,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
-import { getChatStats, getRecentConversations } from "../db.server";
 import { authenticate } from "../shopify.server";
-import prisma from "../db.server";
+import { getDashboardAnalytics } from "../services/analytics.server";
 
 // ============================================================================
 // CONSTANTS
@@ -24,148 +32,66 @@ const PERIODS = {
   all: Infinity,
 };
 
-const LIMITS = {
-  MAX_QUESTIONS: 50,
-  MAX_CONTENT_LENGTH: 200,
-  MAX_ASSISTANT_CONTENT: 300,
-  MAX_PREVIEW_LENGTH: 100,
-  MAX_CONVERSATIONS_DISPLAY: 10,
-  MAX_QUESTIONS_DISPLAY: 30,
+const PERIOD_OPTIONS = [
+  { label: "Aujourd'hui", value: "day" },
+  { label: "7 jours", value: "week" },
+  { label: "30 jours", value: "month" },
+  { label: "Tout", value: "all" },
+];
+
+const OUTCOME_LABELS = {
+  resolved: "Résolue",
+  escalated: "Escaladée",
+  converted: "Convertie",
+  abandoned: "Abandonnée",
+  ongoing: "En cours",
 };
 
-const INTENT_KEYWORDS = {
-  "Compte / Activation": ["activer", "activation", "compte", "créer compte", "inscription"],
-  "Mot de passe": ["mot de passe", "password", "oublié", "réinitialiser"],
-  "Produits": ["produit", "catalogue", "cherche", "prix", "stock"],
-  "Photos / Visuels": ["photo", "visuel", "image", "fiche technique"],
-  "Commande": ["commander", "commande", "panier", "acheter"],
-  "Devis": ["devis"],
-  "Support": ["problème", "aide", "support", "erreur"],
-  "Salutation": ["bonjour", "salut", "hello"],
+const SENTIMENT_LABELS = {
+  positive: "Positif",
+  neutral: "Neutre",
+  negative: "Négatif",
 };
 
 // ============================================================================
-// HELPER FUNCTIONS - Date & Content Processing
+// HELPERS
 // ============================================================================
 
 function calculateDateRange(period) {
   const endDate = new Date();
   const startDate = new Date();
-
   const days = PERIODS[period] || PERIODS.week;
-  if (days === Infinity) {
-    return { startDate: new Date(0), endDate };
-  }
-
+  if (days === Infinity) return { startDate: new Date(0), endDate };
   startDate.setDate(startDate.getDate() - days);
   return { startDate, endDate };
 }
 
-function extractTextContent(content) {
-  try {
-    const parsed = JSON.parse(content);
-    if (Array.isArray(parsed)) {
-      const textBlocks = parsed.filter((b) => b.type === "text");
-      return textBlocks.length > 0 ? textBlocks.map((b) => b.text).join(" ") : null;
-    }
-    return typeof parsed === "string" ? parsed : content;
-  } catch {
-    return content;
-  }
+function formatPercent(value) {
+  if (value == null) return "-";
+  return `${Math.round(value * 100)}%`;
 }
 
-function formatDate(date) {
-  return new Date(date).toLocaleString("fr-FR");
+function formatDuration(seconds) {
+  if (seconds == null) return "-";
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.round(seconds / 60)}min`;
 }
 
-// ============================================================================
-// HELPER FUNCTIONS - Database Queries
-// ============================================================================
-
-async function getAssistantResponse(conversationId, userMessageDate) {
-  const response = await prisma.message.findFirst({
-    where: {
-      conversationId,
-      role: "assistant",
-      createdAt: { gt: userMessageDate },
-    },
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (!response) return "-";
-
-  const content = extractTextContent(response.content);
-  return content ? content.substring(0, LIMITS.MAX_ASSISTANT_CONTENT) : "-";
+function sentimentToTone(sentiment) {
+  if (sentiment === "positive") return "success";
+  if (sentiment === "negative") return "critical";
+  return "info";
 }
 
-// ============================================================================
-// HELPER FUNCTIONS - Data Formatting
-// ============================================================================
-
-async function formatUserQuestion(msg) {
-  const content = extractTextContent(msg.content);
-  if (!content) return null;
-
-  const assistantResponse = await getAssistantResponse(msg.conversationId, msg.createdAt);
-
-  return {
-    content: content.substring(0, LIMITS.MAX_CONTENT_LENGTH),
-    date: formatDate(msg.createdAt),
-    conversationId: msg.conversationId,
-    assistantResponse,
+function outcomeToBadge(outcome) {
+  const tones = {
+    resolved: "success",
+    converted: "success",
+    escalated: "warning",
+    abandoned: "critical",
+    ongoing: "info",
   };
-}
-
-function formatConversationPreview(conversation) {
-  const userMessages = conversation.messages
-    .filter((m) => m.role === "user")
-    .map((m) => extractTextContent(m.content))
-    .filter(Boolean);
-
-  const assistantMessages = conversation.messages
-    .filter((m) => m.role === "assistant")
-    .map((m) => extractTextContent(m.content))
-    .filter(Boolean);
-
-  const userPreview = userMessages.join(" | ");
-  const assistantPreview = assistantMessages.join(" | ");
-
-  return {
-    id: conversation.id,
-    messageCount: conversation.messages.length,
-    createdAt: formatDate(conversation.createdAt),
-    updatedAt: formatDate(conversation.updatedAt),
-    preview: userPreview.substring(0, LIMITS.MAX_PREVIEW_LENGTH) || "-",
-    assistantPreview: assistantPreview.substring(0, LIMITS.MAX_PREVIEW_LENGTH) || "-",
-  };
-}
-
-// ============================================================================
-// HELPER FUNCTIONS - Intent Analysis
-// ============================================================================
-
-function analyzeIntents(questions) {
-  const intentCounts = Object.keys(INTENT_KEYWORDS).reduce((acc, key) => {
-    acc[key] = 0;
-    return acc;
-  }, { "Autre": 0 });
-
-  questions.forEach((q) => {
-    const msgLower = q.content.toLowerCase();
-    let matched = false;
-
-    for (const [intent, keywords] of Object.entries(INTENT_KEYWORDS)) {
-      if (keywords.some((k) => msgLower.includes(k))) {
-        intentCounts[intent]++;
-        matched = true;
-        break;
-      }
-    }
-
-    if (!matched) intentCounts["Autre"]++;
-  });
-
-  return intentCounts;
+  return tones[outcome] || "info";
 }
 
 // ============================================================================
@@ -177,143 +103,340 @@ export const loader = async ({ request }) => {
 
   const url = new URL(request.url);
   const period = url.searchParams.get("period") || "week";
-
   const { startDate, endDate } = calculateDateRange(period);
 
-  // Parallel data fetching
-  const [stats, recentConversations] = await Promise.all([
-    getChatStats(startDate, endDate),
-    getRecentConversations(30),
-  ]);
+  const analytics = await getDashboardAnalytics(null, startDate, endDate);
 
-  // Process user questions with assistant responses
-  const userQuestions = await Promise.all(
-    stats.allUserMessages.slice(0, LIMITS.MAX_QUESTIONS).map(formatUserQuestion)
-  );
-
-  const validQuestions = userQuestions.filter(Boolean);
-  const intentCounts = analyzeIntents(validQuestions);
-
-  return json({
-    stats: {
-      totalConversations: stats.totalConversations,
-      totalMessages: stats.totalMessages,
-      userMessages: stats.userMessages,
-      assistantMessages: stats.assistantMessages,
-    },
-    userQuestions: validQuestions,
-    intentCounts,
-    recentConversations: recentConversations.map(formatConversationPreview),
-    period,
-  });
+  return json({ analytics, period });
 };
 
 // ============================================================================
-// UI COMPONENTS
+// KPI CARDS
 // ============================================================================
 
-function StatCard({ title, value }) {
+function KpiCard({ title, value, subtitle, tone }) {
   return (
     <Card>
       <BlockStack gap="200">
-        <Text variant="headingSm" as="h3">
+        <Text variant="headingSm" as="h3" tone="subdued">
           {title}
         </Text>
-        <Text variant="heading2xl" as="p">
+        <Text variant="heading2xl" as="p" tone={tone}>
           {value}
         </Text>
+        {subtitle && (
+          <Text variant="bodySm" as="p" tone="subdued">
+            {subtitle}
+          </Text>
+        )}
       </BlockStack>
     </Card>
   );
 }
 
-function IntentAnalysisCard({ intentCounts, totalUserMessages }) {
-  const intentRows = Object.entries(intentCounts)
-    .filter(([, count]) => count > 0)
+function KpiHeader({ kpis }) {
+  const sentimentLabel = kpis.avgSentiment != null
+    ? kpis.avgSentiment > 0.3 ? "Positif" : kpis.avgSentiment < -0.3 ? "Négatif" : "Neutre"
+    : "-";
+  const sentimentTone = kpis.avgSentiment > 0.3 ? "success" : kpis.avgSentiment < -0.3 ? "critical" : undefined;
+
+  return (
+    <InlineGrid columns={{ xs: 2, sm: 2, md: 4 }} gap="400">
+      <KpiCard
+        title="Conversations"
+        value={kpis.totalConversations}
+        subtitle={`${kpis.userMessages} msg utilisateur`}
+      />
+      <KpiCard
+        title="Taux de résolution"
+        value={formatPercent(kpis.resolutionRate)}
+        subtitle={kpis.resolutionRate != null ? (
+          kpis.resolutionRate >= 0.7 ? "Bon" : kpis.resolutionRate >= 0.4 ? "Moyen" : "A améliorer"
+        ) : undefined}
+        tone={kpis.resolutionRate >= 0.7 ? "success" : kpis.resolutionRate >= 0.4 ? "caution" : "critical"}
+      />
+      <KpiCard
+        title="Satisfaction"
+        value={sentimentLabel}
+        subtitle={kpis.avgSentiment != null ? `Score: ${kpis.avgSentiment.toFixed(2)}` : undefined}
+        tone={sentimentTone}
+      />
+      <KpiCard
+        title="Temps moyen"
+        value={formatDuration(kpis.avgResolutionTime)}
+        subtitle={kpis.escalationRate != null ? `Escalade: ${formatPercent(kpis.escalationRate)}` : undefined}
+      />
+    </InlineGrid>
+  );
+}
+
+// ============================================================================
+// TAB: VUE D'ENSEMBLE
+// ============================================================================
+
+function OverviewTab({ analytics }) {
+  const { intentDistribution, outcomeDistribution, sentimentDistribution, funnel } = analytics;
+
+  // Intent distribution table
+  const totalIntents = Object.values(intentDistribution).reduce((a, b) => a + b, 0);
+  const intentRows = Object.entries(intentDistribution)
     .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
     .map(([intent, count]) => [
       intent,
       count,
-      `${Math.round((count / totalUserMessages) * 100) || 0}%`,
+      `${totalIntents > 0 ? Math.round((count / totalIntents) * 100) : 0}%`,
     ]);
 
-  const hasData = intentRows.length > 0;
+  // Outcome distribution table
+  const totalOutcomes = Object.values(outcomeDistribution).reduce((a, b) => a + b, 0);
+  const outcomeRows = Object.entries(outcomeDistribution)
+    .sort((a, b) => b[1] - a[1])
+    .map(([outcome, count]) => [
+      OUTCOME_LABELS[outcome] || outcome,
+      count,
+      `${totalOutcomes > 0 ? Math.round((count / totalOutcomes) * 100) : 0}%`,
+    ]);
+
+  // Sentiment distribution
+  const totalSentiment = Object.values(sentimentDistribution).reduce((a, b) => a + b, 0);
+  const sentimentRows = Object.entries(sentimentDistribution)
+    .filter(([, count]) => count > 0)
+    .map(([sentiment, count]) => [
+      SENTIMENT_LABELS[sentiment] || sentiment,
+      count,
+      `${totalSentiment > 0 ? Math.round((count / totalSentiment) * 100) : 0}%`,
+    ]);
 
   return (
-    <Card>
-      <BlockStack gap="400">
-        <Text variant="headingMd" as="h2">
-          Analyse des intentions
-        </Text>
-        {hasData ? (
-          <DataTable
-            columnContentTypes={["text", "numeric", "text"]}
-            headings={["Catégorie", "Nombre", "Pourcentage"]}
-            rows={intentRows}
-          />
-        ) : (
-          <Text as="p" tone="subdued">
-            Aucune donnée pour cette période
-          </Text>
-        )}
-      </BlockStack>
-    </Card>
+    <BlockStack gap="500">
+      {/* Funnel */}
+      <Card>
+        <BlockStack gap="400">
+          <Text variant="headingMd" as="h2">Entonnoir de conversion</Text>
+          <BlockStack gap="300">
+            <FunnelStep label="Conversations" value={funnel.total} max={funnel.total} />
+            <FunnelStep label="Engagées (avec outcome)" value={funnel.engaged} max={funnel.total} />
+            <FunnelStep label="Résolues" value={funnel.resolved} max={funnel.total} tone="success" />
+            <FunnelStep label="Converties" value={funnel.converted} max={funnel.total} tone="success" />
+            <FunnelStep label="Escaladées" value={funnel.escalated} max={funnel.total} tone="warning" />
+            <FunnelStep label="Abandonnées" value={funnel.abandoned} max={funnel.total} tone="critical" />
+          </BlockStack>
+        </BlockStack>
+      </Card>
+
+      <Layout>
+        <Layout.Section variant="oneHalf">
+          <Card>
+            <BlockStack gap="400">
+              <Text variant="headingMd" as="h2">Distribution des intentions</Text>
+              {intentRows.length > 0 ? (
+                <DataTable
+                  columnContentTypes={["text", "numeric", "text"]}
+                  headings={["Intent", "Nombre", "%"]}
+                  rows={intentRows}
+                />
+              ) : (
+                <Text as="p" tone="subdued">Aucune donnée</Text>
+              )}
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+        <Layout.Section variant="oneHalf">
+          <BlockStack gap="400">
+            <Card>
+              <BlockStack gap="400">
+                <Text variant="headingMd" as="h2">Outcomes</Text>
+                {outcomeRows.length > 0 ? (
+                  <DataTable
+                    columnContentTypes={["text", "numeric", "text"]}
+                    headings={["Résultat", "Nombre", "%"]}
+                    rows={outcomeRows}
+                  />
+                ) : (
+                  <Text as="p" tone="subdued">Aucune donnée</Text>
+                )}
+              </BlockStack>
+            </Card>
+            <Card>
+              <BlockStack gap="400">
+                <Text variant="headingMd" as="h2">Sentiment</Text>
+                {sentimentRows.length > 0 ? (
+                  <DataTable
+                    columnContentTypes={["text", "numeric", "text"]}
+                    headings={["Sentiment", "Nombre", "%"]}
+                    rows={sentimentRows}
+                  />
+                ) : (
+                  <Text as="p" tone="subdued">Aucune donnée sentiment</Text>
+                )}
+              </BlockStack>
+            </Card>
+          </BlockStack>
+        </Layout.Section>
+      </Layout>
+    </BlockStack>
   );
 }
 
-function ConversationsCard({ conversations, maxDisplay = LIMITS.MAX_CONVERSATIONS_DISPLAY }) {
-  const conversationRows = conversations
-    .slice(0, maxDisplay)
-    .map((c) => [c.createdAt, c.messageCount, c.preview, c.assistantPreview]);
+function FunnelStep({ label, value, max, tone }) {
+  const progress = max > 0 ? (value / max) * 100 : 0;
+  return (
+    <BlockStack gap="100">
+      <InlineStack align="space-between">
+        <Text variant="bodySm" as="span">{label}</Text>
+        <Text variant="bodySm" as="span" fontWeight="semibold">
+          {value} {max > 0 && value !== max ? `(${Math.round(progress)}%)` : ''}
+        </Text>
+      </InlineStack>
+      <ProgressBar progress={progress} tone={tone} size="small" />
+    </BlockStack>
+  );
+}
 
-  const hasConversations = conversationRows.length > 0;
+// ============================================================================
+// TAB: CONVERSATIONS
+// ============================================================================
+
+function ConversationsTab({ conversations }) {
+  const rows = conversations.map((c) => [
+    new Date(c.createdAt).toLocaleString("fr-FR"),
+    c.messageCount,
+    c.userPreview,
+    c.assistantPreview,
+  ]);
 
   return (
     <Card>
       <BlockStack gap="400">
-        <Text variant="headingMd" as="h2">
-          Conversations récentes
-        </Text>
-        {hasConversations ? (
+        <Text variant="headingMd" as="h2">Conversations récentes</Text>
+        {rows.length > 0 ? (
           <DataTable
             columnContentTypes={["text", "numeric", "text", "text"]}
-            headings={["Date", "Messages", "Aperçu", "Réponse du chatbot"]}
-            rows={conversationRows}
+            headings={["Date", "Messages", "Client", "Assistant"]}
+            rows={rows}
           />
         ) : (
-          <Text as="p" tone="subdued">
-            Aucune conversation
-          </Text>
+          <Text as="p" tone="subdued">Aucune conversation</Text>
         )}
       </BlockStack>
     </Card>
   );
 }
 
-function QuestionsCard({ questions, maxDisplay = LIMITS.MAX_QUESTIONS_DISPLAY }) {
-  const questionRows = questions
-    .slice(0, maxDisplay)
-    .map((q) => [q.date, q.content, q.assistantResponse]);
+// ============================================================================
+// TAB: PERFORMANCE IA
+// ============================================================================
 
-  const hasQuestions = questionRows.length > 0;
+function AiPerformanceTab({ aiPerformance }) {
+  const {
+    vadfResponseCount,
+    mcpFallbackCount,
+    errorCount,
+    totalClassifications,
+    vadfAccuracy,
+    toolUsage,
+  } = aiPerformance;
+
+  const toolRows = Object.entries(toolUsage)
+    .sort((a, b) => b[1] - a[1])
+    .map(([tool, count]) => [tool, count]);
+
+  return (
+    <BlockStack gap="500">
+      <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
+        <KpiCard
+          title="Classifications IA"
+          value={totalClassifications}
+          subtitle="Total des intents classifiés"
+        />
+        <KpiCard
+          title="Réponses VADF"
+          value={vadfResponseCount}
+          subtitle="Traitées par le système VADF"
+        />
+        <KpiCard
+          title="Fallback MCP"
+          value={mcpFallbackCount}
+          subtitle="Renvoyées vers Claude+MCP"
+        />
+        <KpiCard
+          title="Erreurs"
+          value={errorCount}
+          subtitle={errorCount > 0 ? "Tours avec erreur" : "Aucune erreur"}
+          tone={errorCount > 0 ? "critical" : "success"}
+        />
+      </InlineGrid>
+
+      <Layout>
+        <Layout.Section variant="oneHalf">
+          <Card>
+            <BlockStack gap="400">
+              <Text variant="headingMd" as="h2">Précision VADF</Text>
+              {vadfAccuracy != null ? (
+                <BlockStack gap="200">
+                  <Text variant="heading2xl" as="p">{formatPercent(vadfAccuracy)}</Text>
+                  <ProgressBar
+                    progress={vadfAccuracy * 100}
+                    tone={vadfAccuracy >= 0.7 ? "success" : vadfAccuracy >= 0.4 ? "highlight" : "critical"}
+                  />
+                  <Text variant="bodySm" as="p" tone="subdued">
+                    Proportion de requêtes traitées directement par VADF vs fallback MCP
+                  </Text>
+                </BlockStack>
+              ) : (
+                <Text as="p" tone="subdued">Aucune classification</Text>
+              )}
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+        <Layout.Section variant="oneHalf">
+          <Card>
+            <BlockStack gap="400">
+              <Text variant="headingMd" as="h2">Utilisation des outils</Text>
+              {toolRows.length > 0 ? (
+                <DataTable
+                  columnContentTypes={["text", "numeric"]}
+                  headings={["Outil", "Utilisations"]}
+                  rows={toolRows}
+                />
+              ) : (
+                <Text as="p" tone="subdued">Aucun outil utilisé</Text>
+              )}
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+      </Layout>
+    </BlockStack>
+  );
+}
+
+// ============================================================================
+// TAB: EXPORT
+// ============================================================================
+
+function ExportTab({ period }) {
+  const handleExport = useCallback(() => {
+    window.open(`/api/analytics-export?period=${period}&format=csv`, '_blank');
+  }, [period]);
 
   return (
     <Card>
       <BlockStack gap="400">
-        <Text variant="headingMd" as="h2">
-          Questions récentes des utilisateurs
+        <Text variant="headingMd" as="h2">Export des données</Text>
+        <Text as="p">
+          Exportez les données analytiques au format CSV pour une analyse approfondie.
+          L'export inclut : messages, intents, sentiment, outcomes et outils utilisés.
         </Text>
-        {hasQuestions ? (
-          <DataTable
-            columnContentTypes={["text", "text", "text"]}
-            headings={["Date", "Question", "Réponse du chatbot"]}
-            rows={questionRows}
-          />
-        ) : (
-          <Text as="p" tone="subdued">
-            Aucune question pour cette période
-          </Text>
-        )}
+        <InlineStack gap="300">
+          <Button variant="primary" onClick={handleExport}>
+            Exporter en CSV
+          </Button>
+        </InlineStack>
+        <Divider />
+        <Text variant="bodySm" as="p" tone="subdued">
+          Période sélectionnée : {PERIOD_OPTIONS.find(o => o.value === period)?.label || period}
+        </Text>
       </BlockStack>
     </Card>
   );
@@ -324,27 +447,64 @@ function QuestionsCard({ questions, maxDisplay = LIMITS.MAX_QUESTIONS_DISPLAY })
 // ============================================================================
 
 export default function Dashboard() {
-  const { stats, userQuestions, intentCounts, recentConversations } = useLoaderData();
+  const { analytics, period } = useLoaderData();
+  const [selectedTab, setSelectedTab] = useState(0);
+  const navigate = useNavigate();
+
+  const handlePeriodChange = useCallback((value) => {
+    navigate(`/app/dashboard?period=${value}`);
+  }, [navigate]);
+
+  const tabs = [
+    { id: "overview", content: "Vue d'ensemble" },
+    { id: "conversations", content: "Conversations" },
+    { id: "ai-performance", content: "Performance IA" },
+    { id: "export", content: "Export" },
+  ];
+
+  const renderTabContent = () => {
+    switch (selectedTab) {
+      case 0:
+        return <OverviewTab analytics={analytics} />;
+      case 1:
+        return <ConversationsTab conversations={analytics.recentConversations} />;
+      case 2:
+        return <AiPerformanceTab aiPerformance={analytics.aiPerformance} />;
+      case 3:
+        return <ExportTab period={period} />;
+      default:
+        return null;
+    }
+  };
 
   return (
     <Page>
-      <TitleBar title="Dashboard Chat VADF" />
-      <BlockStack gap="500">  
-        {/* Intent analysis and conversations */}
-        <Layout>
-          <Layout.Section>
-            <IntentAnalysisCard
-              intentCounts={intentCounts}
-              totalUserMessages={stats.userMessages}
+      <TitleBar title="Dashboard IA VADF" />
+      <BlockStack gap="500">
+        {/* Period selector */}
+        <InlineStack align="end">
+          <Box width="200px">
+            <Select
+              label="Période"
+              labelHidden
+              options={PERIOD_OPTIONS}
+              value={period}
+              onChange={handlePeriodChange}
             />
-          </Layout.Section>
-          <Layout.Section>
-            <ConversationsCard conversations={recentConversations} />
-          </Layout.Section>
-        </Layout>
+          </Box>
+        </InlineStack>
 
-        {/* Recent questions */}
-        <QuestionsCard questions={userQuestions} />
+        {/* KPI Header */}
+        <KpiHeader kpis={analytics.kpis} />
+
+        {/* Tabs */}
+        <Card padding="0">
+          <Tabs tabs={tabs} selected={selectedTab} onSelect={setSelectedTab}>
+            <Box padding="400">
+              {renderTabContent()}
+            </Box>
+          </Tabs>
+        </Card>
       </BlockStack>
     </Page>
   );

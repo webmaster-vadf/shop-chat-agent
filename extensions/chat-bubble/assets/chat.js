@@ -10,6 +10,8 @@
     isMobile: false,
     conversationId: null,
     currentView: 'menu', // 'menu' or 'chat'
+    proactiveInterval: null,
+    hasUnreadProactive: false,
 
     init: function() {
       const container = document.querySelector('.shop-ai-chat-container');
@@ -45,6 +47,9 @@
 
       // Generate unique conversation ID
       this.conversationId = this.generateConversationId();
+
+      // Start proactive message polling
+      this.startProactivePolling();
     },
 
     setupEventListeners: function() {
@@ -136,7 +141,18 @@
       }
 
       chatWindow.classList.add('active');
-      this.switchToMenu(); // Always show menu first
+
+      // If there are pending proactive messages, go straight to chat
+      if (this._pendingProactive && this._pendingProactive.length > 0) {
+        this.switchToChat();
+        this._pendingProactive.forEach(msg => {
+          this.addProactiveMessageToUI(msg.messageContent);
+        });
+        this._pendingProactive = [];
+        this.hideNotificationBadge();
+      } else {
+        this.switchToMenu(); // Default: show menu first
+      }
 
       if (this.isMobile) {
         document.body.classList.add('shop-ai-chat-open');
@@ -444,6 +460,100 @@
       card.appendChild(infoDiv);
 
       return card;
+    },
+
+    // ================================================================
+    // Proactive Messaging
+    // ================================================================
+
+    startProactivePolling: function() {
+      // Poll every 60 seconds for proactive messages
+      this.proactiveInterval = setInterval(() => {
+        this.checkForProactiveMessages();
+      }, 60000);
+
+      // Also check once on init (after 5s delay to let the page load)
+      setTimeout(() => this.checkForProactiveMessages(), 5000);
+    },
+
+    checkForProactiveMessages: async function() {
+      const config = window.shopChatConfig || {};
+      const isLocal = window.location.hostname.includes('localhost') ||
+                      window.location.hostname.includes('127.0.0.1') ||
+                      window.location.port !== '';
+      const defaultApiUrl = isLocal
+        ? 'http://localhost:3000'
+        : 'https://shop-chat-agent-bold-flower-713.fly.dev';
+      const apiBaseUrl = config.apiBaseUrl || defaultApiUrl;
+
+      try {
+        const params = new URLSearchParams({
+          poll: 'true',
+          conversation_id: this.conversationId
+        });
+
+        const response = await fetch(`${apiBaseUrl}/api/process-proactive?${params}`);
+        if (!response.ok) return;
+
+        const data = await response.json();
+        if (data.messages && data.messages.length > 0) {
+          this.handleProactiveMessages(data.messages);
+        }
+      } catch (e) {
+        // Silent fail for proactive polling
+      }
+    },
+
+    handleProactiveMessages: function(messages) {
+      const { chatWindow } = this.elements;
+      const isOpen = chatWindow && chatWindow.classList.contains('active');
+
+      messages.forEach(msg => {
+        if (isOpen && this.currentView === 'chat') {
+          // Chat is open, display message directly
+          this.addProactiveMessageToUI(msg.messageContent);
+        } else {
+          // Chat is closed, show badge notification
+          this.showNotificationBadge();
+          // Store for display when chat opens
+          if (!this._pendingProactive) this._pendingProactive = [];
+          this._pendingProactive.push(msg);
+        }
+      });
+    },
+
+    addProactiveMessageToUI: function(content) {
+      const { messagesContainer } = this.elements;
+      if (!messagesContainer) return;
+
+      const messageDiv = document.createElement('div');
+      messageDiv.classList.add('shop-ai-message', 'assistant', 'proactive');
+      messageDiv.innerHTML = this.formatMessageContent(content);
+      messagesContainer.appendChild(messageDiv);
+      this.scrollToBottom();
+    },
+
+    showNotificationBadge: function() {
+      const { chatBubble } = this.elements;
+      if (!chatBubble) return;
+
+      this.hasUnreadProactive = true;
+      let badge = chatBubble.querySelector('.shop-ai-notification-badge');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.classList.add('shop-ai-notification-badge');
+        chatBubble.appendChild(badge);
+      }
+      badge.style.display = 'block';
+    },
+
+    hideNotificationBadge: function() {
+      const { chatBubble } = this.elements;
+      if (!chatBubble) return;
+
+      this.hasUnreadProactive = false;
+      const badge = chatBubble.querySelector('.shop-ai-notification-badge');
+      if (badge) badge.style.display = 'none';
     },
 
     openAuthPopup: function(authUrl) {

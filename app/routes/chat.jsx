@@ -4,7 +4,7 @@
  */
 import { json } from "@remix-run/node";
 import MCPClient from "../mcp-client";
-import { saveMessage, getConversationHistory, storeCustomerAccountUrl, getCustomerAccountUrl } from "../db.server";
+import { saveMessage, getConversationHistory, storeCustomerAccountUrl, getCustomerAccountUrl, getConversationContext, updateConversationContext, trackEvent, upsertConversationOutcome, getQuotesByConversation } from "../db.server";
 import AppConfig from "../services/config.server";
 import { createSseStream } from "../services/streaming.server";
 import { createClaudeService } from "../services/claude.server";
@@ -12,6 +12,8 @@ import { createToolService } from "../services/tool.server";
 import { unauthenticated } from "../shopify.server";
 import { getVadfManager } from "../services/vadf-response-manager.js";
 import { checkVadfCustomerAccount } from "../services/vadf-customer-account.server.js";
+import { checkRateLimit } from "../services/rate-limiter.server.js";
+import { analyzeSentimentAsync } from "../services/sentiment.server.js";
 
 
 /**
@@ -93,10 +95,31 @@ async function handleChatRequest(request) {
     // Generate or use existing conversation ID
     const conversationId = body.conversation_id || Date.now().toString();
     const promptType = body.prompt_type || AppConfig.api.defaultPromptType;
+    const shopId = request.headers.get("X-Shopify-Shop-Id");
+
+    // Rate limiting check
+    const rateLimitResult = checkRateLimit(shopId, conversationId);
+    if (!rateLimitResult.allowed) {
+      console.log(`[CHAT] Rate limit exceeded: ${rateLimitResult.reason}, retry after ${rateLimitResult.retryAfter}s`);
+      return new Response(
+        JSON.stringify({
+          error: AppConfig.errorMessages.rateLimitExceeded,
+          details: AppConfig.errorMessages.rateLimitDetails,
+          retryAfter: rateLimitResult.retryAfter
+        }),
+        {
+          status: 429,
+          headers: {
+            ...getCorsHeaders(request),
+            'Retry-After': String(rateLimitResult.retryAfter)
+          }
+        }
+      );
+    }
 
     console.log('🆔 [CHAT] Conversation ID:', conversationId);
     console.log('⚙️ [CHAT] Prompt type:', promptType);
-    console.log('🔐 [CHAT] Shop ID:', request.headers.get("X-Shopify-Shop-Id"));
+    console.log('🔐 [CHAT] Shop ID:', shopId);
     console.log('🌐 [CHAT] Origin:', request.headers.get("Origin"));
 
     // Create a stream for the response
@@ -183,9 +206,20 @@ async function handleChatSession({
     let conversationHistory = [];
     let productsToDisplay = [];
 
+    // Track session start event (fire-and-forget)
+    trackEvent(conversationId, shopId, 'chat_session_started', { promptType });
+
     // Sauvegarder le message utilisateur
     console.log('💾 [SESSION] Saving user message to database');
     await saveMessage(conversationId, 'user', userMessage);
+
+    // Track user message event
+    trackEvent(conversationId, shopId, 'user_message_received', {
+      messageLength: userMessage.length
+    });
+
+    // Analyze sentiment (non-blocking, fire-and-forget)
+    analyzeSentimentAsync(userMessage, conversationId, shopId);
 
     console.log('📚 [SESSION] Loading conversation history from database');
     const dbMessages = await getConversationHistory(conversationId);
@@ -204,6 +238,21 @@ async function handleChatSession({
       };
     });
 
+    // Load conversation context for personalization
+    const conversationContext = await getConversationContext(conversationId);
+    // Load previous quotes for this conversation
+    const previousQuotes = await getQuotesByConversation(conversationId);
+    if (conversationContext) {
+      conversationContext.previousQuotes = previousQuotes;
+      console.log('📋 [SESSION] Loaded conversation context:', {
+        email: conversationContext.customerEmail,
+        name: conversationContext.customerName,
+        company: conversationContext.companyName,
+        messageCount: conversationContext.messageCount,
+        quotes: previousQuotes.length
+      });
+    }
+
     console.log('📝 [SESSION] Parsed conversation history:', conversationHistory.length, 'messages');
     if (conversationHistory.length > 0) {
       console.log('📜 [SESSION] Last 3 messages:', JSON.stringify(conversationHistory.slice(-3).map(m => ({
@@ -213,7 +262,7 @@ async function handleChatSession({
     }
 
     // --- INTÉGRATION VADF AVEC FALLBACK MCP ---
-    if (promptType === 'vadfAssistant') {
+    if (promptType === 'vadfAssistant' || promptType === 'vadfAutonomousAgent') {
       console.log('\n\n════════════════════════════════════════════════════════');
       console.log('🚀🚀🚀 [CHAT] VADF MODE ACTIVATED 🚀🚀🚀');
       console.log('📝 [CHAT] User message:', userMessage);
@@ -224,27 +273,55 @@ async function handleChatSession({
       const vadfManager = await getVadfManager();
       console.log('✅ [CHAT] VADF Manager loaded');
 
-      const vadfIntent = vadfManager.detectIntent(userMessage);
+      // Classification IA avec fallback regex
+      const classification = await vadfManager.classifyWithAI(userMessage, conversationHistory);
+      const vadfIntent = classification.intent;
+      const confidence = classification.confidence;
+      const extractedEntities = classification.entities || {};
+
+      // Track intent detection event
+      trackEvent(conversationId, shopId, 'intent_detected', {
+        intent: vadfIntent,
+        confidence,
+        source: classification.source,
+        entities: extractedEntities
+      });
+
+      // Update conversation context with extracted entities
+      updateConversationContext(conversationId, {
+        lastIntent: vadfIntent,
+        customerEmail: extractedEntities.email || conversationContext?.customerEmail || undefined,
+        customerName: extractedEntities.companyName || conversationContext?.customerName || undefined,
+        companyName: extractedEntities.companyName || conversationContext?.companyName || undefined,
+        extractedEntities: JSON.stringify(extractedEntities)
+      }).catch(e => console.warn('[SESSION] Context update failed:', e.message));
+
       console.log('\n🔍🔍🔍 [CHAT] ===== INTENT DETECTION RESULT ===== 🔍🔍🔍');
       console.log('🔍 [CHAT] Detected intent:', vadfIntent);
-      console.log('🔍 [CHAT] Is activation_compte?', vadfIntent === 'activation_compte');
+      console.log('🔍 [CHAT] Confidence:', confidence);
+      console.log('🔍 [CHAT] Source:', classification.source);
+      console.log('🔍 [CHAT] Entities:', JSON.stringify(extractedEntities));
       console.log('════════════════════════════════════════════════════════\n');
 
-      // Si aucun intent VADF n'est détecté, basculer vers Claude + MCP
-      if (!vadfIntent || vadfIntent === 'unknown') {
+      // Routing basé sur la confiance et le type d'intent
+      const shouldUseMcp = !vadfIntent
+        || vadfIntent === 'unknown'
+        || classification.source === 'ai_fallback'
+        || classification.source === 'ai_generic'
+        || (confidence < 0.5);
+
+      if (shouldUseMcp) {
         console.log('\n⚠️⚠️⚠️ [CHAT] ===== MCP FALLBACK TRIGGERED ===== ⚠️⚠️⚠️');
-        console.log('🔄 [CHAT] No specific VADF intent detected');
-        console.log('🔄 [CHAT] Detected intent value:', vadfIntent);
-        console.log('🔄 [CHAT] Falling back to Claude + Shopify MCP');
+        console.log('🔄 [CHAT] Routing to Claude + Shopify MCP');
+        console.log('🔄 [CHAT] Reason:', classification.source || 'low_confidence');
         console.log('🛍️ [CHAT] Available Storefront MCP tools:', storefrontMcpTools.length);
         console.log('👤 [CHAT] Available Customer MCP tools:', customerMcpTools.length);
         console.log('📝 [CHAT] Claude will search shop data for: "' + userMessage + '"');
-        console.log('🎯 [CHAT] System prompt type:', promptType);
         console.log('════════════════════════════════════════════════════════\n');
         // Ne pas retourner ici, laisser continuer vers le flux Claude
       } else {
         // Intent VADF spécifique détecté, traiter avec le système VADF
-        console.log('✅ [CHAT] VADF-specific intent detected:', vadfIntent);
+        console.log('✅ [CHAT] VADF-specific intent detected:', vadfIntent, '(confidence:', confidence, ')');
         console.log('════════════════════════════════════════════════════════');
 
         let vadfContext = vadfManager.enrichContext({
@@ -252,48 +329,34 @@ async function handleChatSession({
         });
         console.log('📋 [CHAT] Initial context:', vadfContext);
 
+        // Utiliser les entités extraites par l'IA (email, companyName, etc.)
+        const email = extractedEntities.email || undefined;
+
         // Vérification du compte client si l'intention concerne le compte
-        // NOTE: On ne vérifie PAS le compte pour activation_compte car on veut toujours la réponse par défaut
         let accountCheckResult = null;
-        let email;
         if (["mot_de_passe_oublie", "mise_a_jour_infos_entreprise"].includes(vadfIntent)) {
           console.log('👤 [CHAT] Account-related intent detected:', vadfIntent);
-          console.log('📝 [CHAT] User message:', userMessage);
 
-          // Extraction naïve de l'email depuis le message utilisateur (améliorable)
-          const emailMatch = userMessage.match(/[\w.-]+@[\w.-]+\.[A-Za-z]{2,}/);
-          email = emailMatch ? emailMatch[0] : undefined;
-          console.log('📧 [CHAT] Email extraction attempt - Match found:', !!emailMatch);
-          console.log('📧 [CHAT] Extracted email:', email || 'none');
-
-          // Ne vérifier le compte que si un email est trouvé dans le message
           if (email) {
-            console.log('✅ [CHAT] Email found, calling checkVadfCustomerAccount with:', { email });
+            console.log('📧 [CHAT] Email extracted by AI classifier:', email);
             accountCheckResult = await checkVadfCustomerAccount({ email });
-            console.log('✅ [CHAT] Account check completed');
             console.log('✅ [CHAT] Account check result:', JSON.stringify(accountCheckResult, null, 2));
           } else {
-            console.log('⚠️ [CHAT] No email found in message, skipping account check');
-            console.log('⚠️ [CHAT] Will use default VADF response without account override');
+            console.log('⚠️ [CHAT] No email found, skipping account check');
           }
 
           // Adapter le contexte selon le statut du compte
           if (accountCheckResult && accountCheckResult.status === "active") {
-            console.log('🟢 [CHAT] Account status is ACTIVE, setting compte_actif = true');
             vadfContext = { ...vadfContext, compte_actif: true };
           } else if (accountCheckResult && accountCheckResult.status === "inactive") {
-            console.log('🟡 [CHAT] Account status is INACTIVE, setting compte_actif = false');
             vadfContext = { ...vadfContext, compte_actif: false };
-          } else {
-            console.log('⚪ [CHAT] Account status is neither active nor inactive:', accountCheckResult?.status || 'null');
           }
         } else if (vadfIntent === 'activation_compte') {
-          console.log('👤 [CHAT] activation_compte intent - skipping account check, using default VADF response');
+          console.log('👤 [CHAT] activation_compte intent - using default VADF response');
         }
 
-        // Enrichir le contexte client avec des infos supplémentaires si disponibles
+        // Enrichir le contexte avec les entités IA et le résultat du check
         if (accountCheckResult) {
-          console.log('🔄 [CHAT] Enriching context with account check result');
           vadfContext = {
             ...vadfContext,
             email: email,
@@ -301,76 +364,70 @@ async function handleChatSession({
             statut_pro: accountCheckResult.status || undefined,
             telephone: accountCheckResult.telephone || undefined
           };
-          console.log('📝 [CHAT] Enriched context:', JSON.stringify(vadfContext, null, 2));
-        } else {
-          console.log('📝 [CHAT] Using base context (no account check result to enrich)');
+        }
+        // Ajouter les entités IA au contexte même sans account check
+        if (extractedEntities.companyName) {
+          vadfContext.nom_entreprise = extractedEntities.companyName;
+        }
+        if (email && !vadfContext.email) {
+          vadfContext.email = email;
         }
 
-        console.log('🎯 [CHAT] Calling vadfManager.getResponse with:', {
-          intent: vadfIntent,
-          context: vadfContext
-        });
-
         let vadfResponse = vadfManager.getResponse(vadfIntent, vadfContext);
-        console.log('📤 [CHAT] Generated VADF response:');
-        console.log('   - Type:', vadfResponse.type);
-        console.log('   - Text preview:', vadfResponse.text?.substring(0, 100) + '...');
-        console.log('   - Full text length:', vadfResponse.text?.length);
+        console.log('📤 [CHAT] VADF response: type=', vadfResponse.type, ', text length=', vadfResponse.text?.length);
 
-        // Si la vérification de compte a un message spécifique, on le priorise
-        // SAUF pour activation_compte avec status not_found : on garde la réponse VADF par défaut
-        console.log('🔍 [CHAT] Checking if account message should override VADF response');
-        console.log('   - accountCheckResult exists:', !!accountCheckResult);
-        console.log('   - accountCheckResult.message exists:', !!accountCheckResult?.message);
-        console.log('   - accountCheckResult.status:', accountCheckResult?.status);
-
+        // Override si le check de compte a un message spécifique
         const shouldUseAccountMessage = accountCheckResult && accountCheckResult.message
           && !(vadfIntent === 'activation_compte' && accountCheckResult.status === 'not_found');
 
         if (shouldUseAccountMessage) {
-          console.log('⚠️ [CHAT] OVERRIDE: Using account check message instead of VADF response');
-          console.log('   - Original VADF text:', vadfResponse.text?.substring(0, 80));
-          console.log('   - Override text:', accountCheckResult.message?.substring(0, 80));
+          console.log('⚠️ [CHAT] OVERRIDE: Using account check message');
           vadfResponse = { ...vadfResponse, text: accountCheckResult.message };
-        } else {
-          console.log('✅ [CHAT] NO OVERRIDE: Using VADF response as-is');
-          if (vadfIntent === 'activation_compte' && accountCheckResult?.status === 'not_found') {
-            console.log('   - Reason: activation_compte with not_found status - keeping default VADF response');
-          }
         }
-
-        console.log('════════════════════════════════════════════════════════');
-        console.log('📡 [CHAT] SENDING FINAL RESPONSE TO CLIENT');
-        console.log('   - Event type: vadf_response');
-        console.log('   - Intent:', vadfIntent);
-        console.log('   - Response type:', vadfResponse.type);
-        console.log('   - Response text:', vadfResponse.text);
-        console.log('════════════════════════════════════════════════════════');
 
         stream.sendMessage({
           type: 'vadf_response',
           text: vadfResponse.text,
           vadf_intent: vadfIntent,
-          vadf_type: vadfResponse.type
+          vadf_type: vadfResponse.type,
+          vadf_confidence: confidence
         });
+
+        // Track VADF response event
+        trackEvent(conversationId, shopId, 'vadf_response_sent', {
+          intent: vadfIntent,
+          responseType: vadfResponse.type,
+          confidence
+        });
+
+        // Save assistant response to DB
+        saveMessage(conversationId, 'assistant', vadfResponse.text)
+          .catch(e => console.error('[CHAT] Error saving VADF response:', e));
 
         // Escalade automatique si utilisateur non pro
         if (accountCheckResult && accountCheckResult.status === 'not_pro') {
-          console.log('🚨 [CHAT] Non-professional user, sending escalade event');
           stream.sendMessage({
             type: 'escalade',
             contact: accountCheckResult.contact,
             message: 'Escalade automatique : utilisateur non professionnel.'
           });
+          trackEvent(conversationId, shopId, 'escalation_triggered', { reason: 'not_pro' });
+          upsertConversationOutcome(conversationId, { outcome: 'escalated', shopId });
         }
-        // Escalade intelligente : si besoin, notifier contact@vadf.fr
+        // Escalade intelligente
         if (vadfIntent === 'escalade_support' || vadfResponse.type === 'error') {
-          console.log('🚨 [CHAT] Support escalation needed');
           stream.sendMessage({
             type: 'escalade',
             contact: 'contact@vadf.fr',
             message: vadfManager.getCommonPhrase('contact_support')
           });
+          trackEvent(conversationId, shopId, 'escalation_triggered', { reason: vadfIntent });
+          upsertConversationOutcome(conversationId, { outcome: 'escalated', shopId });
+        }
+
+        // Track outcome for goodbye/thanks -> resolved
+        if (['au_revoir', 'remerciement'].includes(vadfIntent)) {
+          upsertConversationOutcome(conversationId, { outcome: 'resolved', shopId });
         }
 
         console.log('✅ [CHAT] VADF response complete, sending end_turn');
@@ -390,15 +447,31 @@ async function handleChatSession({
 
     let finalMessage = { role: 'user', content: userMessage };
     let turnCount = 0;
-    while (finalMessage.stop_reason !== "end_turn") {
-      turnCount++;
-      console.log(`\n🔄 [CLAUDE] Starting conversation turn ${turnCount}`);
+    const MAX_TURNS = 5;
+    const SESSION_TIMEOUT = 30000; // 30 seconds total
+    const sessionStart = Date.now();
 
+    while (finalMessage.stop_reason !== "end_turn" && turnCount < MAX_TURNS) {
+      // Check session timeout
+      if (Date.now() - sessionStart > SESSION_TIMEOUT) {
+        console.warn('[CLAUDE] Session timeout reached, ending conversation');
+        stream.sendMessage({
+          type: 'chunk',
+          chunk: '\n\n_La session a mis trop de temps. Veuillez reformuler votre question._'
+        });
+        break;
+      }
+
+      turnCount++;
+      console.log(`\n🔄 [CLAUDE] Starting conversation turn ${turnCount}/${MAX_TURNS}`);
+
+      try {
       finalMessage = await claudeService.streamConversation(
         {
           messages: conversationHistory,
           promptType,
-          tools: mcpClient.tools
+          tools: mcpClient.tools,
+          conversationContext
         },
         {
           onText: (textDelta) => {
@@ -437,6 +510,12 @@ async function handleChatSession({
             const toolName = content.name;
             const toolArgs = content.input;
             const toolUseId = content.id;
+
+            // Track tool usage
+            trackEvent(conversationId, shopId, 'tool_used', {
+              toolName,
+              argsPreview: JSON.stringify(toolArgs).substring(0, 200)
+            });
 
             console.log('\n🔧 [TOOL] Tool use detected');
             console.log('   - Tool name:', toolName);
@@ -500,6 +579,27 @@ async function handleChatSession({
 
       console.log(`✅ [CLAUDE] Conversation turn ${turnCount} completed`);
       console.log('   - Stop reason:', finalMessage.stop_reason);
+      } catch (turnError) {
+        console.error(`[CLAUDE] Error in turn ${turnCount}:`, turnError.message);
+        trackEvent(conversationId, shopId, 'turn_error', {
+          turn: turnCount,
+          error: turnError.message
+        });
+
+        // Graceful degradation: send partial response and end
+        if (turnError.status === 429 || turnError.status === 529) {
+          stream.sendMessage({
+            type: 'chunk',
+            chunk: '\n\n_Le service est temporairement surchargé. Veuillez réessayer dans quelques instants._'
+          });
+        } else {
+          stream.sendMessage({
+            type: 'chunk',
+            chunk: '\n\n_Une erreur est survenue. Veuillez reformuler votre question ou contacter support@vadf.fr._'
+          });
+        }
+        break; // Exit the while loop
+      }
     }
 
     console.log('\n════════════════════════════════════════════════════════');
@@ -512,6 +612,9 @@ async function handleChatSession({
     console.log('📤 [CLAUDE] Sending end_turn event');
     stream.sendMessage({ type: 'end_turn' });
 
+    // Track conversation turn completion
+    trackEvent(conversationId, shopId, 'conversation_turn_complete', { turnCount });
+
     if (productsToDisplay.length > 0) {
       console.log('🛍️ [CLAUDE] Sending product results:', productsToDisplay.length, 'products');
       productsToDisplay.forEach((product, idx) => {
@@ -520,6 +623,12 @@ async function handleChatSession({
       stream.sendMessage({
         type: 'product_results',
         products: productsToDisplay
+      });
+
+      // Track products displayed
+      trackEvent(conversationId, shopId, 'products_displayed', {
+        count: productsToDisplay.length,
+        products: productsToDisplay.map(p => p.title)
       });
     }
   } catch (error) {

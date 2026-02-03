@@ -32,7 +32,8 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     messages,
     promptType = AppConfig.api.defaultPromptType,
     language = 'fr',
-    tools
+    tools,
+    conversationContext
   }, streamHandlers) => {
     console.log('\n🔵 [CLAUDE-SERVICE] streamConversation called');
     console.log('   - Prompt type:', promptType);
@@ -43,7 +44,31 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     console.log('   - Max tokens:', AppConfig.api.maxTokens);
 
     // Get system prompt from configuration or use default
-    const systemInstruction = getSystemPrompt(promptType, language);
+    let systemInstruction = getSystemPrompt(promptType, language);
+
+    // Enrich system prompt with conversation context (memory layer)
+    if (conversationContext) {
+      const ctxParts = [];
+      if (conversationContext.customerName) ctxParts.push(`Nom du client : ${conversationContext.customerName}`);
+      if (conversationContext.companyName) ctxParts.push(`Entreprise : ${conversationContext.companyName}`);
+      if (conversationContext.customerEmail) ctxParts.push(`Email : ${conversationContext.customerEmail}`);
+      if (conversationContext.accountStatus && conversationContext.accountStatus !== 'unknown') {
+        ctxParts.push(`Statut compte : ${conversationContext.accountStatus === 'pro' ? 'Professionnel vérifié' : 'Non-professionnel'}`);
+      }
+      if (conversationContext.lastIntent) ctxParts.push(`Dernière intention détectée : ${conversationContext.lastIntent}`);
+      if (conversationContext.messageCount > 1) ctxParts.push(`Messages échangés dans cette conversation : ${conversationContext.messageCount}`);
+      if (conversationContext.previousQuotes && conversationContext.previousQuotes.length > 0) {
+        const quotesSummary = conversationContext.previousQuotes.map(q =>
+          `Devis #${q.id.slice(-6)} (${q.status}) - ${q.totalAmount}${q.currency || '€'} - ${new Date(q.createdAt).toLocaleDateString('fr-FR')}`
+        ).join('; ');
+        ctxParts.push(`Devis précédents : ${quotesSummary}`);
+      }
+      if (ctxParts.length > 0) {
+        systemInstruction += `\n\n--- CONTEXTE CLIENT (mémoire de conversation) ---\n${ctxParts.join('\n')}`;
+        console.log('   - Context enrichment added:', ctxParts.length, 'fields');
+      }
+    }
+
     console.log('   - System prompt length:', systemInstruction?.length || 0);
     console.log('   - System prompt preview:', systemInstruction?.substring(0, 100) + '...');
 

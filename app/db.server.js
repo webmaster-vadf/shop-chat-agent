@@ -352,3 +352,285 @@ export async function getRecentConversations(limit = 50) {
     return [];
   }
 }
+
+// ============================================================
+// Phase 1D: Conversation Context & Quote Management
+// ============================================================
+
+/**
+ * Save or update conversation context
+ * @param {string} conversationId
+ * @param {object} contextData - Partial context data to upsert
+ * @returns {Promise<object>}
+ */
+export async function saveConversationContext(conversationId, contextData) {
+  try {
+    return await prisma.conversationContext.upsert({
+      where: { conversationId },
+      update: {
+        ...contextData,
+        updatedAt: new Date()
+      },
+      create: {
+        conversationId,
+        ...contextData
+      }
+    });
+  } catch (error) {
+    console.error('Error saving conversation context:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get conversation context
+ * @param {string} conversationId
+ * @returns {Promise<object|null>}
+ */
+export async function getConversationContext(conversationId) {
+  try {
+    return await prisma.conversationContext.findUnique({
+      where: { conversationId }
+    });
+  } catch (error) {
+    console.error('Error getting conversation context:', error);
+    return null;
+  }
+}
+
+/**
+ * Update conversation context partially (merge with existing)
+ * @param {string} conversationId
+ * @param {object} updates - Fields to update
+ * @returns {Promise<object>}
+ */
+export async function updateConversationContext(conversationId, updates) {
+  try {
+    const existing = await prisma.conversationContext.findUnique({
+      where: { conversationId }
+    });
+
+    if (!existing) {
+      return await saveConversationContext(conversationId, updates);
+    }
+
+    // Merge extracted entities
+    if (updates.extractedEntities && existing.extractedEntities) {
+      try {
+        const existingEntities = JSON.parse(existing.extractedEntities);
+        const newEntities = typeof updates.extractedEntities === 'string'
+          ? JSON.parse(updates.extractedEntities)
+          : updates.extractedEntities;
+        updates.extractedEntities = JSON.stringify({ ...existingEntities, ...newEntities });
+      } catch (e) {
+        // If parse fails, use the new value as-is
+      }
+    }
+
+    return await prisma.conversationContext.update({
+      where: { conversationId },
+      data: {
+        ...updates,
+        messageCount: { increment: 1 },
+        updatedAt: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('Error updating conversation context:', error);
+    throw error;
+  }
+}
+
+/**
+ * Create a new quote
+ * @param {object} quoteData
+ * @returns {Promise<object>}
+ */
+export async function createQuote(quoteData) {
+  try {
+    return await prisma.quote.create({
+      data: quoteData
+    });
+  } catch (error) {
+    console.error('Error creating quote:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get quotes by conversation ID
+ * @param {string} conversationId
+ * @returns {Promise<Array>}
+ */
+export async function getQuotesByConversation(conversationId) {
+  try {
+    return await prisma.quote.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'desc' }
+    });
+  } catch (error) {
+    console.error('Error getting quotes:', error);
+    return [];
+  }
+}
+
+/**
+ * Get quotes by customer email
+ * @param {string} email
+ * @returns {Promise<Array>}
+ */
+export async function getQuotesByEmail(email) {
+  try {
+    return await prisma.quote.findMany({
+      where: { customerEmail: email },
+      orderBy: { createdAt: 'desc' }
+    });
+  } catch (error) {
+    console.error('Error getting quotes by email:', error);
+    return [];
+  }
+}
+
+// ============================================================
+// Phase 2: Analytics
+// ============================================================
+
+/**
+ * Track an analytics event (fire-and-forget)
+ * @param {string} conversationId
+ * @param {string} shopId
+ * @param {string} eventType
+ * @param {object} eventData
+ */
+export async function trackEvent(conversationId, shopId, eventType, eventData = null) {
+  try {
+    await prisma.analyticsEvent.create({
+      data: {
+        conversationId,
+        shopId,
+        eventType,
+        eventData: eventData ? JSON.stringify(eventData) : null
+      }
+    });
+  } catch (error) {
+    // Non-blocking: just log the error
+    console.error('Error tracking event:', error.message);
+  }
+}
+
+/**
+ * Update or create conversation outcome
+ * @param {string} conversationId
+ * @param {object} outcomeData
+ */
+export async function upsertConversationOutcome(conversationId, outcomeData) {
+  try {
+    return await prisma.conversationOutcome.upsert({
+      where: { conversationId },
+      update: { ...outcomeData, updatedAt: new Date() },
+      create: { conversationId, ...outcomeData }
+    });
+  } catch (error) {
+    console.error('Error upserting conversation outcome:', error.message);
+  }
+}
+
+/**
+ * Get analytics summary for a date range
+ * @param {string} shopId
+ * @param {Date} startDate
+ * @param {Date} endDate
+ * @returns {Promise<object>}
+ */
+export async function getAnalyticsSummary(shopId, startDate, endDate) {
+  try {
+    const dateFilter = {
+      createdAt: { gte: startDate, lte: endDate },
+      ...(shopId ? { shopId } : {})
+    };
+
+    const [totalEvents, outcomes, conversations] = await Promise.all([
+      prisma.analyticsEvent.count({ where: dateFilter }),
+      prisma.conversationOutcome.findMany({
+        where: {
+          ...dateFilter,
+          conversationId: { not: undefined }
+        }
+      }),
+      prisma.conversation.count({
+        where: {
+          createdAt: { gte: startDate, lte: endDate }
+        }
+      })
+    ]);
+
+    // Calculate outcome distribution
+    const outcomeDistribution = {};
+    const sentimentDistribution = { positive: 0, neutral: 0, negative: 0 };
+    let totalSentimentScore = 0;
+    let sentimentCount = 0;
+
+    outcomes.forEach(o => {
+      outcomeDistribution[o.outcome] = (outcomeDistribution[o.outcome] || 0) + 1;
+      if (o.sentiment) {
+        sentimentDistribution[o.sentiment] = (sentimentDistribution[o.sentiment] || 0) + 1;
+      }
+      if (o.sentimentScore != null) {
+        totalSentimentScore += o.sentimentScore;
+        sentimentCount++;
+      }
+    });
+
+    return {
+      totalConversations: conversations,
+      totalEvents,
+      outcomeDistribution,
+      sentimentDistribution,
+      avgSentiment: sentimentCount > 0 ? totalSentimentScore / sentimentCount : null,
+      resolutionRate: outcomes.length > 0
+        ? (outcomeDistribution.resolved || 0) / outcomes.length
+        : null,
+      escalationRate: outcomes.length > 0
+        ? (outcomeDistribution.escalated || 0) / outcomes.length
+        : null
+    };
+  } catch (error) {
+    console.error('Error getting analytics summary:', error);
+    return null;
+  }
+}
+
+/**
+ * Get intent distribution for analytics
+ * @param {string} shopId
+ * @param {Date} startDate
+ * @param {Date} endDate
+ * @returns {Promise<object>}
+ */
+export async function getIntentDistribution(shopId, startDate, endDate) {
+  try {
+    const events = await prisma.analyticsEvent.findMany({
+      where: {
+        eventType: 'intent_detected',
+        createdAt: { gte: startDate, lte: endDate },
+        ...(shopId ? { shopId } : {})
+      }
+    });
+
+    const distribution = {};
+    events.forEach(e => {
+      try {
+        const data = JSON.parse(e.eventData);
+        const intent = data.intent || 'unknown';
+        distribution[intent] = (distribution[intent] || 0) + 1;
+      } catch (err) {
+        // skip malformed events
+      }
+    });
+
+    return distribution;
+  } catch (error) {
+    console.error('Error getting intent distribution:', error);
+    return {};
+  }
+}

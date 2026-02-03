@@ -63,23 +63,35 @@ export function createStreamManager(encoder, controller) {
   const handleStreamingError = (error) => {
     console.error('Error processing streaming request:', error);
 
-    if (error.status === 401 || error.message.includes('auth') || error.message.includes('key')) {
+    if (error.status === 401 || error.message?.includes('auth') || error.message?.includes('key')) {
       sendError({
         type: 'error',
         error: 'Authentication failed with Claude API',
         details: 'Please check your API key in environment variables'
       });
-    } else if (error.status === 429 || error.status === 529 || error.message.includes('Overloaded')) {
+    } else if (error.status === 429 || error.status === 529 || error.message?.includes('Overloaded')) {
       sendError({
         type: 'rate_limit_exceeded',
-        error: 'Rate limit exceeded',
-        details: 'Please try again later'
+        error: 'Le service est temporairement surchargé',
+        details: 'Veuillez réessayer dans quelques instants.'
+      });
+    } else if (error.status === 408 || error.message?.includes('timeout') || error.message?.includes('timed out')) {
+      sendError({
+        type: 'error',
+        error: 'Le service a mis trop de temps à répondre',
+        details: 'Veuillez reformuler votre question ou réessayer.'
+      });
+    } else if (error.message?.includes('MCP') || error.message?.includes('mcp')) {
+      sendError({
+        type: 'error',
+        error: 'Service de données temporairement indisponible',
+        details: 'Je peux quand même répondre à vos questions générales. Réessayez dans un instant pour les recherches produit.'
       });
     } else {
       sendError({
         type: 'error',
-        error: 'Failed to get response from Claude',
-        details: error.message
+        error: 'Une erreur est survenue',
+        details: error.message || 'Veuillez réessayer ou contacter support@vadf.fr'
       });
     }
   };

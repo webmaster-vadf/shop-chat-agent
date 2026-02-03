@@ -762,3 +762,28 @@
       transform: scale(1);
     }
   }
+
+  /* Proactive notification badge */
+  .shop-ai-notification-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 16px;
+    height: 16px;
+    background-color: #e53935;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    display: none;
+    animation: badge-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes badge-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+  }
+
+  /* Proactive message style */
+  .shop-ai-message.proactive {
+    border-left: 3px solid #1976d2;
+    background: linear-gradient(135deg, #e3f2fd, #f0f4f8);
+  }
