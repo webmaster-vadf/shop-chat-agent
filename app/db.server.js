@@ -720,6 +720,91 @@ export async function upsertConversationSummary(conversationId, summary, tokenCo
   }
 }
 
+// ============================================================
+// Ticket 6: Feedback utilisateur
+// ============================================================
+
+/**
+ * Save user feedback for a message
+ * @param {object} data - { conversationId, messageId?, shopId?, rating, comment? }
+ * @returns {Promise<object>}
+ */
+export async function saveFeedback(data) {
+  try {
+    return await prisma.feedback.create({
+      data: {
+        conversationId: data.conversationId,
+        messageId: data.messageId || null,
+        shopId: data.shopId || null,
+        rating: data.rating,
+        comment: data.comment || null,
+      }
+    });
+  } catch (error) {
+    console.error('Error saving feedback:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get all feedback for a conversation
+ * @param {string} conversationId
+ * @returns {Promise<Array>}
+ */
+export async function getFeedbackByConversation(conversationId) {
+  try {
+    return await prisma.feedback.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'desc' }
+    });
+  } catch (error) {
+    console.error('Error getting feedback:', error);
+    return [];
+  }
+}
+
+/**
+ * Get feedback summary for analytics
+ * @param {string} [shopId]
+ * @param {Date} startDate
+ * @param {Date} endDate
+ * @returns {Promise<object>}
+ */
+export async function getFeedbackSummary(shopId, startDate, endDate) {
+  try {
+    const dateFilter = {
+      createdAt: { gte: startDate, lte: endDate },
+      ...(shopId ? { shopId } : {})
+    };
+
+    const [total, upCount, downCount, withComments] = await Promise.all([
+      prisma.feedback.count({ where: dateFilter }),
+      prisma.feedback.count({ where: { ...dateFilter, rating: 'up' } }),
+      prisma.feedback.count({ where: { ...dateFilter, rating: 'down' } }),
+      prisma.feedback.count({ where: { ...dateFilter, comment: { not: null } } }),
+    ]);
+
+    // Get recent negative feedback with comments for review
+    const recentNegative = await prisma.feedback.findMany({
+      where: { ...dateFilter, rating: 'down', comment: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      take: 10
+    });
+
+    return {
+      total,
+      up: upCount,
+      down: downCount,
+      withComments,
+      satisfactionRate: total > 0 ? upCount / total : null,
+      recentNegative
+    };
+  } catch (error) {
+    console.error('Error getting feedback summary:', error);
+    return { total: 0, up: 0, down: 0, withComments: 0, satisfactionRate: null, recentNegative: [] };
+  }
+}
+
 export async function getIntentDistribution(shopId, startDate, endDate) {
   try {
     const events = await prisma.analyticsEvent.findMany({

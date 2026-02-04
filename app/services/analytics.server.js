@@ -3,6 +3,7 @@
  * Centralized analytics queries for dashboard and export
  */
 import prisma from "../db.server";
+import { getFeedbackSummary } from "../db.server";
 
 /**
  * Get comprehensive analytics summary for dashboard
@@ -23,7 +24,8 @@ export async function getDashboardAnalytics(shopId, startDate, endDate) {
     userMessageCount,
     outcomes,
     events,
-    recentConversations
+    recentConversations,
+    feedbackStats
   ] = await Promise.all([
     prisma.conversation.count({ where: dateFilter }),
     prisma.message.count({ where: dateFilter }),
@@ -39,7 +41,8 @@ export async function getDashboardAnalytics(shopId, startDate, endDate) {
       orderBy: { updatedAt: 'desc' },
       take: 20,
       include: { messages: { orderBy: { createdAt: 'asc' } } }
-    })
+    }),
+    getFeedbackSummary(shopId, startDate, endDate)
   ]);
 
   // Outcome distribution
@@ -183,6 +186,9 @@ export async function getDashboardAnalytics(shopId, startDate, endDate) {
       converted,
       abandoned
     },
+
+    // User feedback
+    feedback: feedbackStats,
 
     // Recent conversations
     recentConversations: recentConversations.map(formatConversationForDashboard)

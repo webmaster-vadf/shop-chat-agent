@@ -209,3 +209,18 @@ model ConversationSummary {
   tokenCount     Int?
   updatedAt      DateTime @updatedAt
 }
+
+// --- Ticket 6: Feedback utilisateur ---
+
+model Feedback {
+  id             String   @id @default(cuid())
+  conversationId String
+  messageId      String?
+  shopId         String?
+  rating         String   // "up" | "down"
+  comment        String?
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([rating])
+}

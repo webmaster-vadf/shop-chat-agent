@@ -12,6 +12,7 @@
     currentView: 'menu', // 'menu' or 'chat'
     proactiveInterval: null,
     hasUnreadProactive: false,
+    messageCounter: 0,
 
     init: function() {
       const container = document.querySelector('.shop-ai-chat-container');
@@ -224,13 +225,39 @@
       const { messagesContainer } = this.elements;
       if (!messagesContainer) return;
 
+      const messageId = 'msg_' + (++this.messageCounter) + '_' + Date.now();
       const messageDiv = document.createElement('div');
       messageDiv.classList.add('shop-ai-message', role);
+      messageDiv.dataset.messageId = messageId;
 
       if (typeof content === 'string') {
         messageDiv.innerHTML = this.formatMessageContent(content);
       } else {
         messageDiv.textContent = JSON.stringify(content);
+      }
+
+      // Add feedback buttons for assistant messages
+      if (role === 'assistant') {
+        const feedbackBar = document.createElement('div');
+        feedbackBar.classList.add('shop-ai-feedback-bar');
+
+        const thumbUp = document.createElement('button');
+        thumbUp.classList.add('shop-ai-feedback-btn');
+        thumbUp.dataset.rating = 'up';
+        thumbUp.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>';
+        thumbUp.title = 'Utile';
+        thumbUp.addEventListener('click', () => this.handleFeedback(messageId, 'up', feedbackBar));
+
+        const thumbDown = document.createElement('button');
+        thumbDown.classList.add('shop-ai-feedback-btn');
+        thumbDown.dataset.rating = 'down';
+        thumbDown.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>';
+        thumbDown.title = 'Pas utile';
+        thumbDown.addEventListener('click', () => this.handleFeedback(messageId, 'down', feedbackBar));
+
+        feedbackBar.appendChild(thumbUp);
+        feedbackBar.appendChild(thumbDown);
+        messageDiv.appendChild(feedbackBar);
       }
 
       messagesContainer.appendChild(messageDiv);
@@ -554,6 +581,51 @@
       this.hasUnreadProactive = false;
       const badge = chatBubble.querySelector('.shop-ai-notification-badge');
       if (badge) badge.style.display = 'none';
+    },
+
+    handleFeedback: function(messageId, rating, feedbackBar) {
+      // Mark selected button and disable both
+      const buttons = feedbackBar.querySelectorAll('.shop-ai-feedback-btn');
+      buttons.forEach(btn => {
+        btn.disabled = true;
+        if (btn.dataset.rating === rating) {
+          btn.classList.add('selected');
+        }
+      });
+
+      // Send feedback to API
+      this.sendFeedback(messageId, rating);
+    },
+
+    sendFeedback: async function(messageId, rating, comment) {
+      const config = window.shopChatConfig || {};
+      const isLocal = window.location.hostname.includes('localhost') ||
+                      window.location.hostname.includes('127.0.0.1') ||
+                      window.location.port !== '';
+      const defaultApiUrl = isLocal
+        ? 'http://localhost:3000'
+        : 'https://shop-chat-agent-bold-flower-713.fly.dev';
+      const apiBaseUrl = config.apiBaseUrl || defaultApiUrl;
+      const shopId = window.shopId;
+
+      try {
+        await fetch(`${apiBaseUrl}/api/feedback`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Origin': window.location.origin,
+            'X-Shopify-Shop-Id': shopId || ''
+          },
+          body: JSON.stringify({
+            conversation_id: this.conversationId,
+            message_id: messageId,
+            rating: rating,
+            comment: comment || null
+          })
+        });
+      } catch (e) {
+        // Silent fail for feedback
+      }
     },
 
     openAuthPopup: function(authUrl) {
