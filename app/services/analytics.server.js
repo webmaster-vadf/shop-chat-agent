@@ -344,6 +344,214 @@ export async function getExportData(shopId, startDate, endDate) {
 }
 
 /**
+ * Get weekly pattern report for a date range
+ * Identifies top intents, errors, tool failures, and problematic patterns
+ * @param {string} [shopId]
+ * @param {Date} startDate
+ * @param {Date} endDate
+ * @returns {Promise<object>}
+ */
+export async function getWeeklyReport(shopId, startDate, endDate) {
+  const dateFilter = { createdAt: { gte: startDate, lte: endDate } };
+  const shopFilter = shopId ? { shopId } : {};
+
+  const [events, outcomes, feedbackItems, conversations] = await Promise.all([
+    prisma.analyticsEvent.findMany({
+      where: { ...dateFilter, ...shopFilter }
+    }),
+    prisma.conversationOutcome.findMany({
+      where: { ...dateFilter, ...shopFilter }
+    }),
+    prisma.feedback.findMany({
+      where: { ...dateFilter, ...shopFilter }
+    }),
+    prisma.conversation.count({ where: dateFilter })
+  ]);
+
+  // --- Intent analysis ---
+  const intentCounts = {};
+  const intentSources = {};
+  const toolCounts = {};
+  const toolErrors = {};
+  const errorMessages = {};
+  let totalErrors = 0;
+  let totalToolCalls = 0;
+  const routingAmbiguities = [];
+
+  events.forEach(e => {
+    try {
+      const data = e.eventData ? JSON.parse(e.eventData) : {};
+
+      if (e.eventType === 'intent_detected') {
+        const intent = data.intent || 'unknown';
+        intentCounts[intent] = (intentCounts[intent] || 0) + 1;
+        const src = data.source || 'unknown';
+        intentSources[src] = (intentSources[src] || 0) + 1;
+      }
+
+      if (e.eventType === 'tool_used') {
+        const tool = data.toolName || 'unknown';
+        totalToolCalls++;
+        toolCounts[tool] = (toolCounts[tool] || 0) + 1;
+        if (data.error || data.isError) {
+          toolErrors[tool] = (toolErrors[tool] || 0) + 1;
+        }
+      }
+
+      if (e.eventType === 'turn_error') {
+        totalErrors++;
+        const msg = data.error || data.message || 'unknown';
+        const key = msg.substring(0, 100);
+        errorMessages[key] = (errorMessages[key] || 0) + 1;
+      }
+
+      if (e.eventType === 'routing_selected' && data.isAmbiguous) {
+        routingAmbiguities.push({
+          conversationId: e.conversationId,
+          scores: data.scores,
+          gap: data.scoreGap,
+          date: e.createdAt
+        });
+      }
+    } catch { /* skip */ }
+  });
+
+  // --- Outcome analysis ---
+  const outcomeCounts = {};
+  const sentimentCounts = { positive: 0, neutral: 0, negative: 0 };
+  outcomes.forEach(o => {
+    outcomeCounts[o.outcome] = (outcomeCounts[o.outcome] || 0) + 1;
+    if (o.sentiment) sentimentCounts[o.sentiment]++;
+  });
+
+  // --- Feedback analysis ---
+  const feedbackUp = feedbackItems.filter(f => f.rating === 'up').length;
+  const feedbackDown = feedbackItems.filter(f => f.rating === 'down').length;
+  const negativeComments = feedbackItems
+    .filter(f => f.rating === 'down' && f.comment)
+    .map(f => ({ conversationId: f.conversationId, comment: f.comment, date: f.createdAt }));
+
+  // --- Top N helpers ---
+  const topN = (obj, n) => Object.entries(obj)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, n)
+    .map(([key, count]) => ({ key, count }));
+
+  // --- Identify top 5 problems ---
+  const problems = [];
+
+  // High error rate
+  if (totalErrors > 0) {
+    problems.push({
+      type: 'errors',
+      severity: totalErrors > 10 ? 'high' : 'medium',
+      description: `${totalErrors} erreurs detectees`,
+      details: topN(errorMessages, 3)
+    });
+  }
+
+  // Tool failures
+  const failedTools = Object.entries(toolErrors).filter(([, c]) => c > 0);
+  if (failedTools.length > 0) {
+    problems.push({
+      type: 'tool_failures',
+      severity: failedTools.some(([, c]) => c > 5) ? 'high' : 'medium',
+      description: `${failedTools.reduce((s, [, c]) => s + c, 0)} echecs outils`,
+      details: failedTools.map(([tool, count]) => ({
+        key: tool,
+        count,
+        failRate: toolCounts[tool] ? Math.round((count / toolCounts[tool]) * 100) + '%' : 'N/A'
+      }))
+    });
+  }
+
+  // High escalation rate
+  const escalated = outcomeCounts.escalated || 0;
+  const totalOutcomes = outcomes.length;
+  if (totalOutcomes > 0 && escalated / totalOutcomes > 0.2) {
+    problems.push({
+      type: 'high_escalation',
+      severity: escalated / totalOutcomes > 0.4 ? 'high' : 'medium',
+      description: `Taux d'escalade: ${Math.round((escalated / totalOutcomes) * 100)}% (${escalated}/${totalOutcomes})`,
+      details: []
+    });
+  }
+
+  // Negative sentiment dominance
+  if (sentimentCounts.negative > sentimentCounts.positive && sentimentCounts.negative > 5) {
+    problems.push({
+      type: 'negative_sentiment',
+      severity: 'medium',
+      description: `Sentiment negatif dominant: ${sentimentCounts.negative} negatifs vs ${sentimentCounts.positive} positifs`,
+      details: []
+    });
+  }
+
+  // Low satisfaction from feedback
+  const totalFeedback = feedbackUp + feedbackDown;
+  if (totalFeedback > 0 && feedbackDown / totalFeedback > 0.3) {
+    problems.push({
+      type: 'low_satisfaction',
+      severity: feedbackDown / totalFeedback > 0.5 ? 'high' : 'medium',
+      description: `Satisfaction faible: ${Math.round((feedbackUp / totalFeedback) * 100)}% positif (${feedbackDown} negatifs)`,
+      details: negativeComments.slice(0, 3)
+    });
+  }
+
+  // Ambiguous routing
+  if (routingAmbiguities.length > 5) {
+    problems.push({
+      type: 'ambiguous_routing',
+      severity: 'low',
+      description: `${routingAmbiguities.length} routages ambigus detectes`,
+      details: []
+    });
+  }
+
+  // Sort by severity and take top 5
+  const severityOrder = { high: 0, medium: 1, low: 2 };
+  problems.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+
+  return {
+    period: {
+      start: startDate.toISOString(),
+      end: endDate.toISOString()
+    },
+    summary: {
+      totalConversations: conversations,
+      totalEvents: events.length,
+      totalErrors,
+      totalToolCalls,
+      totalOutcomes,
+      totalFeedback
+    },
+    intents: {
+      distribution: topN(intentCounts, 20),
+      sources: intentSources,
+      unknownCount: intentCounts.unknown || 0
+    },
+    tools: {
+      usage: topN(toolCounts, 10),
+      errors: toolErrors,
+      totalCalls: totalToolCalls
+    },
+    outcomes: outcomeCounts,
+    sentiment: sentimentCounts,
+    feedback: {
+      up: feedbackUp,
+      down: feedbackDown,
+      satisfactionRate: totalFeedback > 0 ? Math.round((feedbackUp / totalFeedback) * 100) : null,
+      negativeComments: negativeComments.slice(0, 10)
+    },
+    routing: {
+      ambiguousCount: routingAmbiguities.length
+    },
+    topProblems: problems.slice(0, 5),
+    generatedAt: new Date().toISOString()
+  };
+}
+
+/**
  * Format a conversation for dashboard display
  * @param {object} conversation - Conversation with messages
  * @returns {object}

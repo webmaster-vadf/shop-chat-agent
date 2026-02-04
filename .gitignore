@@ -21,6 +21,9 @@ database.sqlite
 
 /extensions/*/dist
 
+# Generated reports
+/reports
+
 # Ignore shopify files created during app dev
 .shopify/*
 .shopify.lock
