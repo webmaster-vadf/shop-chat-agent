@@ -84,6 +84,9 @@ export async function getDashboardAnalytics(shopId, startDate, endDate) {
   let totalScoreGap = 0;
   let scoreGapCount = 0;
 
+  // Experiment analytics
+  const experimentExposures = {};
+
   events.forEach(e => {
     try {
       const data = e.eventData ? JSON.parse(e.eventData) : {};
@@ -120,6 +123,12 @@ export async function getDashboardAnalytics(shopId, startDate, endDate) {
           totalScoreGap += data.scoreGap;
           scoreGapCount++;
         }
+      }
+      if (e.eventType === 'experiment_exposure') {
+        const expKey = data.experimentKey || 'unknown';
+        const varKey = data.variantKey || 'unknown';
+        if (!experimentExposures[expKey]) experimentExposures[expKey] = {};
+        experimentExposures[expKey][varKey] = (experimentExposures[expKey][varKey] || 0) + 1;
       }
     } catch (err) {
       // skip malformed events
@@ -189,6 +198,11 @@ export async function getDashboardAnalytics(shopId, startDate, endDate) {
 
     // User feedback
     feedback: feedbackStats,
+
+    // Experiments
+    experiments: {
+      exposures: experimentExposures
+    },
 
     // Recent conversations
     recentConversations: recentConversations.map(formatConversationForDashboard)

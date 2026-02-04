@@ -15,6 +15,7 @@ import { getVadfManager } from "../services/vadf-response-manager.js";
 import { checkVadfCustomerAccount } from "../services/vadf-customer-account.server.js";
 import { checkRateLimit } from "../services/rate-limiter.server.js";
 import { analyzeSentimentAsync } from "../services/sentiment.server.js";
+import { getActiveExperiments, assignVariant } from "../services/experiments.server.js";
 
 
 /**
@@ -208,6 +209,33 @@ async function handleChatSession({
 
     // Track session start event (fire-and-forget)
     trackEvent(conversationId, shopId, 'chat_session_started', { promptType });
+
+    // --- A/B TESTING ASSIGNMENT ---
+    let experimentAssignments = {};
+    try {
+      const activeExperiments = await getActiveExperiments();
+      for (const exp of activeExperiments) {
+        const variant = await assignVariant(exp.key, conversationId, shopId);
+        if (variant) {
+          experimentAssignments[exp.key] = {
+            variantKey: variant.key,
+            config: variant.configJson ? JSON.parse(variant.configJson) : {}
+          };
+          trackEvent(conversationId, shopId, 'experiment_exposure', {
+            experimentKey: exp.key,
+            experimentName: exp.name,
+            variantKey: variant.key,
+            variantName: variant.name
+          });
+        }
+      }
+      if (Object.keys(experimentAssignments).length > 0) {
+        console.log(`🧪 [EXPERIMENT] Assigned variants:`, Object.entries(experimentAssignments).map(([k, v]) => `${k}=${v.variantKey}`).join(', '));
+      }
+    } catch (e) {
+      console.warn('[EXPERIMENT] Assignment failed:', e.message);
+    }
+    // --- FIN A/B TESTING ---
 
     // Sauvegarder le message utilisateur
     console.log('💾 [SESSION] Saving user message to database');
