@@ -33,9 +33,13 @@ npm run env             # Manage environment variables
 npm run lint            # Run ESLint
 ```
 
-### Testing
+### Testing & Reporting
 ```bash
-node scripts/test-100-conversations.js  # Run 100-conversation regression test suite (requires dev server running)
+node scripts/test-100-conversations.js              # Run 100-conversation regression test suite (requires dev server running)
+node scripts/generate-weekly-report.js               # Generate weekly analytics report (JSON)
+node scripts/generate-weekly-report.js --format csv  # Generate weekly report as CSV
+node scripts/generate-weekly-report.js --days 14     # Custom date range
+node scripts/generate-weekly-report.js --shop myshop # Filter by shop
 ```
 
 ## Architecture Overview
@@ -149,6 +153,10 @@ Request body format:
 **Analytics** (`app/services/analytics.server.js`):
 - `trackEvent()` fire-and-forget at ~10 points in the chat flow
 - `getAnalyticsSummary()`, `getConversationMetrics()`, `getIntentDistribution()`, `getSentimentTrend()`, `getConversionFunnel()`
+- `getDashboardAnalytics()` aggregates KPIs, feedback, routing, and experiment data for the admin dashboard
+- `computeConversionScore(events, outcome)` heuristic scoring (0.0-1.0) with weighted signals: product search (+0.10), cart interaction (+0.25), devis (+0.20), tarifs (+0.10), commander (+0.15)
+- `getWeeklyReport()` generates weekly analytics reports with problem detection (6 severity types)
+- `getFeedbackSummary()` returns satisfaction rate, positive/negative counts, and recent negative comments
 
 **Sentiment** (`app/services/sentiment.server.js`):
 - Async sentiment analysis via Claude Haiku (positive/neutral/negative + score)
@@ -166,24 +174,41 @@ Request body format:
 - **Response manager** (`app/services/vadf-response-manager.js`): Hybrid intent detection (regex fast-path + `classifyWithAI()` AI fallback) and templated response generation from `app/prompts/vadf_reponses.json`
 - **Customer account checker** (`app/services/vadf-customer-account.server.js`): Validates professional customer status via Shopify Customer API
 
+**Context Manager** (`app/services/context-manager.server.js`):
+- Centralized context lifecycle: load, merge, save with TTL management
+- Loads conversation context, memory facts, and conversation summary in a single call
+- Persists extracted entities, memory facts (atomic upsert), and auto-generated summaries
+
+**Experiments** (`app/services/experiments.server.js`):
+- A/B testing service with deterministic variant assignment (djb2 hash of `conversationId + experimentKey`)
+- `getActiveExperiments()`, `assignVariant()`, `getConversationAssignments()`
+- Weighted bucket selection for variant distribution
+- Idempotent assignment via `@@unique([experimentId, conversationId])` constraint
+
 **Proactive Engine** (`app/services/proactive-engine.server.js`):
 - Schedules proactive messages triggered by webhooks (cart abandonment, welcome, order updates)
 - Processes pending messages via cron endpoint
 
 #### 5. Database Schema (`prisma/schema.prisma`)
 
-Key models:
+17 models with optimized indexes:
 - **Session**: Shopify app session storage
-- **Conversation/Message**: Chat history persistence
+- **Conversation/Message**: Chat history persistence (indexed on `createdAt`, `updatedAt`)
 - **CustomerToken**: OAuth tokens for Customer Account API access (with expiry)
 - **CodeVerifier**: PKCE flow state management
 - **CustomerAccountUrl**: Cached customer account URLs per conversation
 - **ConversationContext**: Memory layer (email, name, company, account status, last intent, last agent type, extracted entities, message count)
 - **Quote**: B2B quotes with items (JSON), amount, status (draft/sent/accepted/expired), validity
 - **AnalyticsEvent**: Event tracking (conversationId, shopId, eventType, eventData)
-- **ConversationOutcome**: Conversation results (outcome, sentiment, resolution time, tools used)
+- **ConversationOutcome**: Conversation results (outcome, sentiment, resolution time, tools used, `aiConfidence`, `conversionScore`)
 - **ProactiveMessage**: Scheduled proactive messages (trigger type, content, status, scheduled time)
 - **ProactiveTemplate**: Message templates for proactive triggers
+- **MemoryFact**: Long-term memory facts per conversation (`@@unique([conversationId, key])`, atomic upsert)
+- **ConversationSummary**: Auto-generated conversation summaries (unique per conversation)
+- **Feedback**: User feedback (thumbs up/down + optional comment, indexed on `shopId`, `rating`, `createdAt`)
+- **Experiment**: A/B test definitions (key, status, date range) with variants and assignments
+- **ExperimentVariant**: Variant config with weighted distribution (`configJson` for variant-specific settings)
+- **ExperimentAssignment**: Deterministic variant assignments (`@@unique([experimentId, conversationId])`)
 
 #### 6. Chat Widget Extension (`extensions/chat-bubble/`)
 Shopify theme app extension providing the customer-facing UI:
@@ -191,11 +216,16 @@ Shopify theme app extension providing the customer-facing UI:
 - Communicates with backend via SSE
 - Displays products, handles cart updates, shows auth prompts
 - Proactive message polling (every 60s) with notification badge
+- Feedback buttons (thumbs up/down) on assistant messages with optional comment, sent to `/api/feedback`
 
 #### 7. Admin Dashboard (`app/routes/app.dashboard.jsx`)
 Polaris-based analytics dashboard with:
-- KPI header (conversations, resolution rate, response time, sentiment, conversion)
-- Tabs: Overview (intent distribution, sentiment trend), Conversations (list with badges), AI Performance (accuracy, tools, fallback rate), Export (CSV)
+- KPI header (conversations, resolution rate, response time, sentiment, conversion score)
+- Tabs:
+  - **Overview**: Intent distribution, sentiment trend, feedback section (satisfaction rate, positive/negative counts, recent negative comments)
+  - **Conversations**: List with status badges
+  - **AI Performance**: Accuracy, tools, fallback rate, agent routing performance (per-agent and per-method tables, confidence/ambiguity KPIs), A/B testing results (per-experiment variant exposure tables)
+  - **Export**: CSV export
 
 ### Authentication Flow
 
@@ -360,6 +390,26 @@ Ensure the `application_url` in `shopify.app.toml` matches your production domai
 - Extracted entities from AI classification are persisted
 - Previous quotes loaded and injected into system prompt
 - `lastAgentType` enables context-based agent continuation
+- `MemoryFact` stores long-term facts with atomic upsert (unique on `conversationId + key`)
+- `ConversationSummary` auto-generated summaries injected into system prompt
+- `ContextManager` centralizes load/merge/save operations
+
+**A/B Testing & Experiments:**
+- Deterministic variant assignment via djb2 hash of `conversationId + experimentKey`
+- Assignments are idempotent (`@@unique([experimentId, conversationId])`)
+- `experiment_exposure` events tracked in analytics for each assignment
+- Variant configs (`configJson`) available for conditional behavior in agents/prompts
+
+**Conversion Tracking:**
+- `computeConversionScore()` runs non-blocking (fire-and-forget) after each chat turn
+- Weighted heuristic: product search +0.10, cart +0.25, devis +0.20, tarifs +0.10, commander +0.15
+- Score persisted in `ConversationOutcome.conversionScore` (0.0-1.0)
+- Aggregated as `avgConversionScore` in dashboard KPIs
+
+**Feedback:**
+- Thumbs up/down buttons on assistant messages in chat widget
+- Feedback stored with `conversationId`, `messageId`, `shopId`, `rating`, optional `comment`
+- Aggregated in dashboard: satisfaction rate, recent negative comments
 
 **Error Handling:**
 - Tool errors (especially `auth_required`) handled in `tool.server.js`
@@ -426,11 +476,13 @@ Ensure the `application_url` in `shopify.app.toml` matches your production domai
 **Infrastructure:**
 - [app/services/rate-limiter.server.js](app/services/rate-limiter.server.js): Sliding window rate limiting
 - [app/services/cache.server.js](app/services/cache.server.js): TTL cache with LRU eviction
-- [app/services/analytics.server.js](app/services/analytics.server.js): Event tracking and metrics
+- [app/services/analytics.server.js](app/services/analytics.server.js): Event tracking, metrics, conversion scoring, weekly reports
+- [app/services/context-manager.server.js](app/services/context-manager.server.js): Centralized context lifecycle (load/merge/save)
+- [app/services/experiments.server.js](app/services/experiments.server.js): A/B testing (deterministic assignment, variant config)
 
 **Data Layer:**
-- [app/db.server.js](app/db.server.js): Database operations (conversations, context, quotes, tokens, analytics)
-- [prisma/schema.prisma](prisma/schema.prisma): Data model (11 models)
+- [app/db.server.js](app/db.server.js): Database operations (conversations, context, quotes, tokens, analytics, memory facts, feedback)
+- [prisma/schema.prisma](prisma/schema.prisma): Data model (17 models with optimized indexes)
 
 **Authentication:**
 - [app/auth.server.js](app/auth.server.js): PKCE flow implementation
@@ -452,17 +504,19 @@ Ensure the `application_url` in `shopify.app.toml` matches your production domai
 - [app/routes/api.process-proactive.jsx](app/routes/api.process-proactive.jsx): Cron endpoint for processing scheduled messages
 
 **Admin UI:**
-- [app/routes/app.dashboard.jsx](app/routes/app.dashboard.jsx): Analytics dashboard (KPIs, conversations, AI performance, export)
+- [app/routes/app.dashboard.jsx](app/routes/app.dashboard.jsx): Analytics dashboard (KPIs, feedback, agent routing, A/B testing, conversations, export)
 - [app/routes/app.proactive.jsx](app/routes/app.proactive.jsx): Proactive messaging admin
 - [app/routes/api.analytics-export.jsx](app/routes/api.analytics-export.jsx): CSV export endpoint
+- [app/routes/api.feedback.jsx](app/routes/api.feedback.jsx): Feedback submission endpoint (POST)
 
 **Storefront UI:**
 - [extensions/chat-bubble/blocks/chat-interface.liquid](extensions/chat-bubble/blocks/chat-interface.liquid): Theme extension UI
 - [extensions/chat-bubble/assets/chat.js](extensions/chat-bubble/assets/chat.js): Frontend logic + proactive polling
 - [extensions/chat-bubble/assets/chat.css](extensions/chat-bubble/assets/chat.css): Styling
 
-**Testing:**
+**Testing & Reporting:**
 - [scripts/test-100-conversations.js](scripts/test-100-conversations.js): 100-conversation regression test suite (11 categories)
+- [scripts/generate-weekly-report.js](scripts/generate-weekly-report.js): Weekly analytics report generator (JSON/CSV, problem detection)
 
 **Frontend SSE Event Types:**
 The frontend (`chat.js`) handles the following Server-Sent Event types from the backend:
@@ -478,3 +532,12 @@ The frontend (`chat.js`) handles the following Server-Sent Event types from the 
 - `escalade`: Support escalation notification with `contact` and `message`
 - `end_turn`: Conversation turn complete
 - `[DONE]`: Stream termination signal
+
+**Analytics Event Types:**
+Key events tracked via `trackEvent()`:
+- `chat_session_started`, `user_message_received`, `intent_detected`
+- `routing_selected` (agent type, confidence, method, ambiguity)
+- `tool_used`, `products_displayed`, `vadf_response_sent`
+- `experiment_exposure` (experiment key, variant key)
+- `feedback_submitted` (rating, comment)
+- `sentiment_analyzed`, `conversation_outcome`
