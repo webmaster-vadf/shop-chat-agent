@@ -5,7 +5,7 @@
 import { json } from "@remix-run/node";
 import MCPClient from "../mcp-client";
 import { saveMessage, getConversationHistory, storeCustomerAccountUrl, getCustomerAccountUrl, trackEvent, upsertConversationOutcome } from "../db.server";
-import { loadContext, mergeContext } from "../services/context-manager.server";
+import { loadContext, mergeContext, extractAndSaveFacts, updateSummaryIfNeeded } from "../services/context-manager.server";
 import AppConfig from "../services/config.server";
 import { createSseStream } from "../services/streaming.server";
 import { createClaudeService } from "../services/claude.server";
@@ -220,6 +220,10 @@ async function handleChatSession({
 
     // Analyze sentiment (non-blocking, fire-and-forget)
     analyzeSentimentAsync(userMessage, conversationId, shopId);
+
+    // Extract and persist memory facts from user message (non-blocking)
+    extractAndSaveFacts(conversationId, userMessage, null, shopId)
+      .catch(e => console.warn('[MEMORY] Fact extraction failed:', e.message));
 
     console.log('📚 [SESSION] Loading conversation history from database');
     const dbMessages = await getConversationHistory(conversationId);
@@ -471,6 +475,11 @@ async function handleChatSession({
     console.log('════════════════════════════════════════════════════════\n');
 
     stream.sendMessage({ type: 'end_turn' });
+
+    // Update conversation summary if threshold reached (non-blocking)
+    const currentMsgCount = conversationContext?.messageCount || conversationHistory.length;
+    updateSummaryIfNeeded(conversationId, conversationHistory, currentMsgCount)
+      .catch(e => console.warn('[MEMORY] Summary update failed:', e.message));
 
     // Track conversation turn completion
     trackEvent(conversationId, shopId, 'conversation_turn_complete', {

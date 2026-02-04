@@ -607,6 +607,119 @@ export async function getAnalyticsSummary(shopId, startDate, endDate) {
  * @param {Date} endDate
  * @returns {Promise<object>}
  */
+// ============================================================
+// Ticket 2: Memory Facts & Conversation Summary
+// ============================================================
+
+/**
+ * Get all memory facts for a conversation
+ * @param {string} conversationId
+ * @returns {Promise<Array>}
+ */
+export async function getMemoryFacts(conversationId) {
+  try {
+    return await prisma.memoryFact.findMany({
+      where: { conversationId },
+      orderBy: { lastSeenAt: 'desc' }
+    });
+  } catch (error) {
+    console.error('Error getting memory facts:', error);
+    return [];
+  }
+}
+
+/**
+ * Upsert a memory fact (update if same key exists, create otherwise)
+ * @param {string} conversationId
+ * @param {object} factData - { key, value, confidence?, source?, shopId? }
+ * @returns {Promise<object>}
+ */
+export async function upsertMemoryFact(conversationId, factData) {
+  try {
+    const existing = await prisma.memoryFact.findFirst({
+      where: { conversationId, key: factData.key }
+    });
+
+    if (existing) {
+      return await prisma.memoryFact.update({
+        where: { id: existing.id },
+        data: {
+          value: factData.value,
+          confidence: factData.confidence ?? existing.confidence,
+          source: factData.source ?? existing.source,
+          lastSeenAt: new Date()
+        }
+      });
+    }
+
+    return await prisma.memoryFact.create({
+      data: {
+        conversationId,
+        shopId: factData.shopId || null,
+        key: factData.key,
+        value: factData.value,
+        confidence: factData.confidence || null,
+        source: factData.source || null,
+      }
+    });
+  } catch (error) {
+    console.error('Error upserting memory fact:', error);
+    throw error;
+  }
+}
+
+/**
+ * Save multiple memory facts at once
+ * @param {string} conversationId
+ * @param {Array<{key: string, value: string, confidence?: number, source?: string}>} facts
+ * @param {string} [shopId]
+ * @returns {Promise<Array>}
+ */
+export async function saveMemoryFacts(conversationId, facts, shopId) {
+  const results = [];
+  for (const fact of facts) {
+    const result = await upsertMemoryFact(conversationId, { ...fact, shopId });
+    results.push(result);
+  }
+  return results;
+}
+
+/**
+ * Get conversation summary
+ * @param {string} conversationId
+ * @returns {Promise<object|null>}
+ */
+export async function getConversationSummary(conversationId) {
+  try {
+    return await prisma.conversationSummary.findUnique({
+      where: { conversationId }
+    });
+  } catch (error) {
+    console.error('Error getting conversation summary:', error);
+    return null;
+  }
+}
+
+/**
+ * Save or update conversation summary
+ * @param {string} conversationId
+ * @param {string} summary
+ * @param {number} [tokenCount]
+ * @returns {Promise<object>}
+ */
+export async function upsertConversationSummary(conversationId, summary, tokenCount) {
+  try {
+    return await prisma.conversationSummary.upsert({
+      where: { conversationId },
+      update: { summary, tokenCount: tokenCount || null },
+      create: { conversationId, summary, tokenCount: tokenCount || null }
+    });
+  } catch (error) {
+    console.error('Error upserting conversation summary:', error);
+    throw error;
+  }
+}
+
 export async function getIntentDistribution(shopId, startDate, endDate) {
   try {
     const events = await prisma.analyticsEvent.findMany({

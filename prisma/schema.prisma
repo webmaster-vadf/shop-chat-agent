@@ -185,3 +185,27 @@ model ProactiveTemplate {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
+
+// --- Ticket 2: Mémoire long-terme (facts + résumé) ---
+
+model MemoryFact {
+  id             String   @id @default(cuid())
+  conversationId String
+  shopId         String?
+  key            String
+  value          String
+  confidence     Float?
+  source         String?  // "user" | "tool" | "inference"
+  lastSeenAt     DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([key])
+}
+
+model ConversationSummary {
+  id             String   @id @default(cuid())
+  conversationId String   @unique
+  summary        String
+  tokenCount     Int?
+  updatedAt      DateTime @updatedAt
+}
