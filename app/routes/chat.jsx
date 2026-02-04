@@ -4,7 +4,7 @@
  */
 import { json } from "@remix-run/node";
 import MCPClient from "../mcp-client";
-import { saveMessage, getConversationHistory, storeCustomerAccountUrl, getCustomerAccountUrl, trackEvent, upsertConversationOutcome } from "../db.server";
+import { saveMessage, getConversationHistory, storeCustomerAccountUrl, getCustomerAccountUrl, trackEvent, upsertConversationOutcome, getConversationEvents } from "../db.server";
 import { loadContext, mergeContext, extractAndSaveFacts, updateSummaryIfNeeded } from "../services/context-manager.server";
 import AppConfig from "../services/config.server";
 import { createSseStream } from "../services/streaming.server";
@@ -15,6 +15,7 @@ import { getVadfManager } from "../services/vadf-response-manager.js";
 import { checkVadfCustomerAccount } from "../services/vadf-customer-account.server.js";
 import { checkRateLimit } from "../services/rate-limiter.server.js";
 import { analyzeSentimentAsync } from "../services/sentiment.server.js";
+import { computeConversionScore } from "../services/analytics.server.js";
 import { getActiveExperiments, assignVariant } from "../services/experiments.server.js";
 
 
@@ -464,6 +465,16 @@ async function handleChatSession({
 
         console.log('✅ [CHAT] VADF response complete, sending end_turn');
         stream.sendMessage({ type: 'end_turn' });
+
+        // Compute and persist conversion score (non-blocking)
+        getConversationEvents(conversationId).then(events => {
+          const score = computeConversionScore(events);
+          if (score > 0) {
+            upsertConversationOutcome(conversationId, { conversionScore: score, shopId });
+            console.log(`📈 [CONVERSION] Score: ${score} for conversation ${conversationId}`);
+          }
+        }).catch(e => console.warn('[CONVERSION] Score computation failed:', e.message));
+
         return;
       }
     }
@@ -538,6 +549,15 @@ async function handleChatSession({
         products: productsToDisplay.map(p => p.title)
       });
     }
+
+    // Compute and persist conversion score (non-blocking)
+    getConversationEvents(conversationId).then(events => {
+      const score = computeConversionScore(events);
+      if (score > 0) {
+        upsertConversationOutcome(conversationId, { conversionScore: score, shopId });
+        console.log(`📈 [CONVERSION] Score: ${score} for conversation ${conversationId}`);
+      }
+    }).catch(e => console.warn('[CONVERSION] Score computation failed:', e.message));
   } catch (error) {
     throw error;
   }

@@ -552,6 +552,91 @@ export async function getWeeklyReport(shopId, startDate, endDate) {
 }
 
 /**
+ * Compute a heuristic conversion score (0.0 – 1.0) for a conversation
+ * based on events that signal purchase intent.
+ *
+ * Scoring signals and weights:
+ *   - Product search / catalog browsing:      +0.10 each (max 0.20)
+ *   - Products displayed to user:             +0.10 each (max 0.20)
+ *   - Cart interaction (get/update):          +0.25
+ *   - Quote / devis intent detected:          +0.20
+ *   - Pricing / tarifs intent detected:       +0.10
+ *   - Order-related intent (commander):       +0.15
+ *   - B2B-specific intent (b2b_only):         +0.05
+ *   - Positive sentiment outcome:             +0.05
+ *   - Multiple user messages (engagement):    +0.05 if >=3 messages
+ *
+ * The raw sum is clamped to [0.0, 1.0].
+ *
+ * @param {Array} events - AnalyticsEvent rows for the conversation
+ * @param {object} [outcome] - ConversationOutcome row (optional)
+ * @returns {number} Score between 0.0 and 1.0
+ */
+export function computeConversionScore(events, outcome) {
+  let score = 0;
+  let productSearches = 0;
+  let productsDisplayed = 0;
+  let hasCartInteraction = false;
+  let userMessageCount = 0;
+
+  const conversionIntents = {
+    devis: 0.20,
+    tarifs: 0.10,
+    commander_produits: 0.15,
+    b2b_only: 0.05,
+    decouvrir_produits: 0.05
+  };
+
+  for (const e of events) {
+    try {
+      const data = e.eventData ? JSON.parse(e.eventData) : {};
+
+      if (e.eventType === 'intent_detected') {
+        const intent = data.intent || '';
+        if (conversionIntents[intent]) {
+          score += conversionIntents[intent];
+        }
+      }
+
+      if (e.eventType === 'tool_used') {
+        const tool = data.toolName || '';
+        if (tool === 'search_shop_catalog') {
+          productSearches++;
+        }
+        if (tool === 'get_cart' || tool === 'update_cart') {
+          hasCartInteraction = true;
+        }
+      }
+
+      if (e.eventType === 'products_displayed') {
+        productsDisplayed++;
+      }
+
+      if (e.eventType === 'user_message_received') {
+        userMessageCount++;
+      }
+    } catch { /* skip malformed */ }
+  }
+
+  // Product search signals (max 0.20)
+  score += Math.min(productSearches * 0.10, 0.20);
+
+  // Products displayed signals (max 0.20)
+  score += Math.min(productsDisplayed * 0.10, 0.20);
+
+  // Cart interaction is a strong conversion signal
+  if (hasCartInteraction) score += 0.25;
+
+  // Engagement: multiple user messages
+  if (userMessageCount >= 3) score += 0.05;
+
+  // Positive sentiment from outcome
+  if (outcome?.sentiment === 'positive') score += 0.05;
+
+  return Math.min(Math.round(score * 100) / 100, 1.0);
+}
+
+/**
  * Format a conversation for dashboard display
  * @param {object} conversation - Conversation with messages
  * @returns {object}

@@ -519,6 +519,22 @@ export async function trackEvent(conversationId, shopId, eventType, eventData = 
 }
 
 /**
+ * Get all analytics events for a specific conversation
+ * @param {string} conversationId
+ * @returns {Promise<Array>}
+ */
+export async function getConversationEvents(conversationId) {
+  try {
+    return await prisma.analyticsEvent.findMany({
+      where: { conversationId }
+    });
+  } catch (error) {
+    console.error('Error getting conversation events:', error.message);
+    return [];
+  }
+}
+
+/**
  * Update or create conversation outcome
  * @param {string} conversationId
  * @param {object} outcomeData
