@@ -52,6 +52,8 @@ export async function getDashboardAnalytics(shopId, startDate, endDate) {
   let sentimentCount = 0;
   let totalResolutionTime = 0;
   let resolutionTimeCount = 0;
+  let totalConversionScore = 0;
+  let conversionScoreCount = 0;
 
   outcomes.forEach(o => {
     outcomeDistribution[o.outcome] = (outcomeDistribution[o.outcome] || 0) + 1;
@@ -65,6 +67,10 @@ export async function getDashboardAnalytics(shopId, startDate, endDate) {
     if (o.resolutionTime != null) {
       totalResolutionTime += o.resolutionTime;
       resolutionTimeCount++;
+    }
+    if (o.conversionScore != null) {
+      totalConversionScore += o.conversionScore;
+      conversionScoreCount++;
     }
   });
 
@@ -155,6 +161,9 @@ export async function getDashboardAnalytics(shopId, startDate, endDate) {
       avgSentiment: sentimentCount > 0 ? totalSentimentScore / sentimentCount : null,
       avgResolutionTime: resolutionTimeCount > 0
         ? Math.round(totalResolutionTime / resolutionTimeCount)
+        : null,
+      avgConversionScore: conversionScoreCount > 0
+        ? Math.round((totalConversionScore / conversionScoreCount) * 100) / 100
         : null
     },
 

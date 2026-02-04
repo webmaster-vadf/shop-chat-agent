@@ -141,7 +141,7 @@ function KpiHeader({ kpis }) {
   const sentimentTone = kpis.avgSentiment > 0.3 ? "success" : kpis.avgSentiment < -0.3 ? "critical" : undefined;
 
   return (
-    <InlineGrid columns={{ xs: 2, sm: 2, md: 4 }} gap="400">
+    <InlineGrid columns={{ xs: 2, sm: 3, md: 5 }} gap="400">
       <KpiCard
         title="Conversations"
         value={kpis.totalConversations}
@@ -166,6 +166,12 @@ function KpiHeader({ kpis }) {
         value={formatDuration(kpis.avgResolutionTime)}
         subtitle={kpis.escalationRate != null ? `Escalade: ${formatPercent(kpis.escalationRate)}` : undefined}
       />
+      <KpiCard
+        title="Score conversion"
+        value={kpis.avgConversionScore != null ? `${Math.round(kpis.avgConversionScore * 100)}%` : '-'}
+        subtitle={kpis.conversionRate != null ? `Taux: ${formatPercent(kpis.conversionRate)}` : undefined}
+        tone={kpis.avgConversionScore >= 0.5 ? "success" : kpis.avgConversionScore >= 0.2 ? "caution" : undefined}
+      />
     </InlineGrid>
   );
 }
@@ -175,7 +181,7 @@ function KpiHeader({ kpis }) {
 // ============================================================================
 
 function OverviewTab({ analytics }) {
-  const { intentDistribution, outcomeDistribution, sentimentDistribution, funnel } = analytics;
+  const { intentDistribution, outcomeDistribution, sentimentDistribution, funnel, feedback } = analytics;
 
   // Intent distribution table
   const totalIntents = Object.values(intentDistribution).reduce((a, b) => a + b, 0);
@@ -275,6 +281,46 @@ function OverviewTab({ analytics }) {
           </BlockStack>
         </Layout.Section>
       </Layout>
+
+      {/* Feedback section */}
+      <Card>
+        <BlockStack gap="400">
+          <Text variant="headingMd" as="h2">Feedback utilisateur</Text>
+          {feedback && feedback.total > 0 ? (
+            <BlockStack gap="300">
+              <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
+                <KpiCard
+                  title="Satisfaction"
+                  value={formatPercent(feedback.satisfactionRate)}
+                  subtitle={`${feedback.total} votes`}
+                  tone={feedback.satisfactionRate >= 0.7 ? "success" : feedback.satisfactionRate >= 0.4 ? "caution" : "critical"}
+                />
+                <KpiCard title="Positifs" value={feedback.up} tone="success" />
+                <KpiCard title="Négatifs" value={feedback.down} tone={feedback.down > 0 ? "critical" : undefined} />
+                <KpiCard title="Avec commentaire" value={feedback.withComments} />
+              </InlineGrid>
+              {feedback.recentNegative && feedback.recentNegative.length > 0 && (
+                <Card>
+                  <BlockStack gap="300">
+                    <Text variant="headingSm" as="h3">Retours négatifs récents</Text>
+                    <DataTable
+                      columnContentTypes={["text", "text", "text"]}
+                      headings={["Date", "Conversation", "Commentaire"]}
+                      rows={feedback.recentNegative.map(f => [
+                        new Date(f.createdAt).toLocaleDateString("fr-FR"),
+                        f.conversationId?.substring(0, 12) + '...',
+                        f.comment?.substring(0, 100) || '-'
+                      ])}
+                    />
+                  </BlockStack>
+                </Card>
+              )}
+            </BlockStack>
+          ) : (
+            <Text as="p" tone="subdued">Aucun feedback reçu</Text>
+          )}
+        </BlockStack>
+      </Card>
     </BlockStack>
   );
 }
@@ -328,7 +374,7 @@ function ConversationsTab({ conversations }) {
 // TAB: PERFORMANCE IA
 // ============================================================================
 
-function AiPerformanceTab({ aiPerformance }) {
+function AiPerformanceTab({ aiPerformance, routing, experiments }) {
   const {
     vadfResponseCount,
     mcpFallbackCount,
@@ -407,6 +453,114 @@ function AiPerformanceTab({ aiPerformance }) {
           </Card>
         </Layout.Section>
       </Layout>
+
+      {/* Agent Routing Performance */}
+      <Card>
+        <BlockStack gap="400">
+          <Text variant="headingMd" as="h2">Performance des agents</Text>
+          {routing && routing.totalRoutings > 0 ? (
+            <BlockStack gap="300">
+              <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
+                <KpiCard
+                  title="Routages"
+                  value={routing.totalRoutings}
+                  subtitle="Décisions de routage"
+                />
+                <KpiCard
+                  title="Confiance moy."
+                  value={routing.avgConfidence != null ? `${Math.round(routing.avgConfidence * 100)}%` : '-'}
+                  tone={routing.avgConfidence >= 0.7 ? "success" : routing.avgConfidence >= 0.4 ? "caution" : "critical"}
+                />
+                <KpiCard
+                  title="Ambigus"
+                  value={routing.ambiguousCount}
+                  subtitle={routing.ambiguousRate != null ? `${Math.round(routing.ambiguousRate * 100)}% des routages` : undefined}
+                  tone={routing.ambiguousCount > 0 ? "warning" : "success"}
+                />
+                <KpiCard
+                  title="Écart moy."
+                  value={routing.avgScoreGap != null ? routing.avgScoreGap.toFixed(2) : '-'}
+                  subtitle="Entre top 2 agents"
+                />
+              </InlineGrid>
+              <Layout>
+                <Layout.Section variant="oneHalf">
+                  <Card>
+                    <BlockStack gap="300">
+                      <Text variant="headingSm" as="h3">Routage par agent</Text>
+                      <DataTable
+                        columnContentTypes={["text", "numeric", "text"]}
+                        headings={["Agent", "Routages", "%"]}
+                        rows={Object.entries(routing.byAgent)
+                          .sort((a, b) => b[1] - a[1])
+                          .map(([agent, count]) => [
+                            agent,
+                            count,
+                            `${Math.round((count / routing.totalRoutings) * 100)}%`
+                          ])}
+                      />
+                    </BlockStack>
+                  </Card>
+                </Layout.Section>
+                <Layout.Section variant="oneHalf">
+                  <Card>
+                    <BlockStack gap="300">
+                      <Text variant="headingSm" as="h3">Routage par méthode</Text>
+                      <DataTable
+                        columnContentTypes={["text", "numeric"]}
+                        headings={["Méthode", "Utilisations"]}
+                        rows={Object.entries(routing.byMethod)
+                          .sort((a, b) => b[1] - a[1])
+                          .map(([method, count]) => [method, count])}
+                      />
+                    </BlockStack>
+                  </Card>
+                </Layout.Section>
+              </Layout>
+            </BlockStack>
+          ) : (
+            <Text as="p" tone="subdued">Aucune donnée de routage</Text>
+          )}
+        </BlockStack>
+      </Card>
+
+      {/* A/B Testing */}
+      <Card>
+        <BlockStack gap="400">
+          <Text variant="headingMd" as="h2">A/B Testing</Text>
+          {experiments && Object.keys(experiments.exposures).length > 0 ? (
+            <BlockStack gap="400">
+              {Object.entries(experiments.exposures).map(([expKey, variants]) => {
+                const totalExposures = Object.values(variants).reduce((a, b) => a + b, 0);
+                const variantRows = Object.entries(variants)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([variantKey, count]) => [
+                    variantKey,
+                    count,
+                    `${Math.round((count / totalExposures) * 100)}%`
+                  ]);
+                return (
+                  <Card key={expKey}>
+                    <BlockStack gap="300">
+                      <InlineStack align="space-between">
+                        <Text variant="headingSm" as="h3">{expKey}</Text>
+                        <Text variant="bodySm" as="span" tone="subdued">{totalExposures} expositions</Text>
+                      </InlineStack>
+                      <DataTable
+                        columnContentTypes={["text", "numeric", "text"]}
+                        headings={["Variante", "Expositions", "Répartition"]}
+                        rows={variantRows}
+                      />
+                    </BlockStack>
+                  </Card>
+                );
+              })}
+            </BlockStack>
+          ) : (
+            <Text as="p" tone="subdued">Aucune expérience active</Text>
+          )}
+        </BlockStack>
+      </Card>
     </BlockStack>
   );
 }
@@ -469,7 +623,7 @@ export default function Dashboard() {
       case 1:
         return <ConversationsTab conversations={analytics.recentConversations} />;
       case 2:
-        return <AiPerformanceTab aiPerformance={analytics.aiPerformance} />;
+        return <AiPerformanceTab aiPerformance={analytics.aiPerformance} routing={analytics.routing} experiments={analytics.experiments} />;
       case 3:
         return <ExportTab period={period} />;
       default:
