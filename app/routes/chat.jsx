@@ -443,18 +443,20 @@ async function handleChatSession({
     const { AgentOrchestrator } = await import('../agents/orchestrator.server.js');
     const orchestrator = new AgentOrchestrator();
 
-    const { agent, routingReason } = orchestrator.route(userMessage, vadfIntent, conversationContext);
+    const { agent, routingReason, routingConfidence, routingMethod } = orchestrator.route(userMessage, vadfIntent, conversationContext);
 
     console.log('\n\n════════════════════════════════════════════════════════');
-    console.log(`🤖 [AGENT] Routed to: ${agent.name} (reason: ${routingReason})`);
+    console.log(`🤖 [AGENT] Routed to: ${agent.name} (reason: ${routingReason}, confidence: ${routingConfidence}, method: ${routingMethod})`);
     console.log('📊 [AGENT] Conversation history length:', conversationHistory.length);
     console.log('🛠️ [AGENT] Total tools available:', mcpClient.tools?.length || 0);
     console.log('════════════════════════════════════════════════════════\n');
 
-    // Track agent routing
-    trackEvent(conversationId, shopId, 'agent_routed', {
+    // Track routing decision with confidence
+    trackEvent(conversationId, shopId, 'routing_selected', {
       agentType: agent.name,
-      routingReason
+      routingReason,
+      routingConfidence,
+      routingMethod
     });
 
     // Update context with agent type

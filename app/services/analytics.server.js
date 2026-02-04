@@ -72,6 +72,12 @@ export async function getDashboardAnalytics(shopId, startDate, endDate) {
   let mcpFallbackCount = 0;
   let errorCount = 0;
 
+  // Routing analytics
+  const routingByAgent = {};
+  const routingByMethod = {};
+  let totalRoutingConfidence = 0;
+  let routingCount = 0;
+
   events.forEach(e => {
     try {
       const data = e.eventData ? JSON.parse(e.eventData) : {};
@@ -91,6 +97,16 @@ export async function getDashboardAnalytics(shopId, startDate, endDate) {
       }
       if (e.eventType === 'turn_error') {
         errorCount++;
+      }
+      if (e.eventType === 'routing_selected') {
+        const agent = data.agentType || 'unknown';
+        const method = data.routingMethod || 'unknown';
+        routingByAgent[agent] = (routingByAgent[agent] || 0) + 1;
+        routingByMethod[method] = (routingByMethod[method] || 0) + 1;
+        if (data.routingConfidence != null) {
+          totalRoutingConfidence += data.routingConfidence;
+          routingCount++;
+        }
       }
     } catch (err) {
       // skip malformed events
@@ -135,6 +151,14 @@ export async function getDashboardAnalytics(shopId, startDate, endDate) {
         ? vadfResponseCount / (vadfResponseCount + mcpFallbackCount)
         : null,
       toolUsage
+    },
+
+    // Agent routing analytics
+    routing: {
+      byAgent: routingByAgent,
+      byMethod: routingByMethod,
+      totalRoutings: routingCount,
+      avgConfidence: routingCount > 0 ? totalRoutingConfidence / routingCount : null
     },
 
     // Conversion funnel
