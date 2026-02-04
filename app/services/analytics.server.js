@@ -77,6 +77,9 @@ export async function getDashboardAnalytics(shopId, startDate, endDate) {
   const routingByMethod = {};
   let totalRoutingConfidence = 0;
   let routingCount = 0;
+  let ambiguousCount = 0;
+  let totalScoreGap = 0;
+  let scoreGapCount = 0;
 
   events.forEach(e => {
     try {
@@ -106,6 +109,13 @@ export async function getDashboardAnalytics(shopId, startDate, endDate) {
         if (data.routingConfidence != null) {
           totalRoutingConfidence += data.routingConfidence;
           routingCount++;
+        }
+        if (data.isAmbiguous) {
+          ambiguousCount++;
+        }
+        if (data.scoreGap != null) {
+          totalScoreGap += data.scoreGap;
+          scoreGapCount++;
         }
       }
     } catch (err) {
@@ -158,7 +168,10 @@ export async function getDashboardAnalytics(shopId, startDate, endDate) {
       byAgent: routingByAgent,
       byMethod: routingByMethod,
       totalRoutings: routingCount,
-      avgConfidence: routingCount > 0 ? totalRoutingConfidence / routingCount : null
+      avgConfidence: routingCount > 0 ? totalRoutingConfidence / routingCount : null,
+      ambiguousCount,
+      ambiguousRate: routingCount > 0 ? ambiguousCount / routingCount : null,
+      avgScoreGap: scoreGapCount > 0 ? totalScoreGap / scoreGapCount : null
     },
 
     // Conversion funnel

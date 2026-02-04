@@ -264,6 +264,7 @@ async function handleChatSession({
 
     // --- INTÉGRATION VADF AVEC FALLBACK MCP ---
     let vadfIntent = undefined; // hoisted for orchestrator access
+    let vadfConfidence = undefined; // hoisted for hybrid scoring
     if (promptType === 'vadfAssistant' || promptType === 'vadfAutonomousAgent') {
       console.log('\n\n════════════════════════════════════════════════════════');
       console.log('🚀🚀🚀 [CHAT] VADF MODE ACTIVATED 🚀🚀🚀');
@@ -278,7 +279,8 @@ async function handleChatSession({
       // Classification IA avec fallback regex
       const classification = await vadfManager.classifyWithAI(userMessage, conversationHistory);
       vadfIntent = classification.intent;
-      const confidence = classification.confidence;
+      vadfConfidence = classification.confidence;
+      const confidence = vadfConfidence;
       const extractedEntities = classification.entities || {};
 
       // Track intent detection event
@@ -443,20 +445,27 @@ async function handleChatSession({
     const { AgentOrchestrator } = await import('../agents/orchestrator.server.js');
     const orchestrator = new AgentOrchestrator();
 
-    const { agent, routingReason, routingConfidence, routingMethod } = orchestrator.route(userMessage, vadfIntent, conversationContext);
+    const { agent, routingReason, routingConfidence, routingMethod, scoreBreakdown } = orchestrator.route(userMessage, vadfIntent, conversationContext, vadfConfidence);
 
     console.log('\n\n════════════════════════════════════════════════════════');
     console.log(`🤖 [AGENT] Routed to: ${agent.name} (reason: ${routingReason}, confidence: ${routingConfidence}, method: ${routingMethod})`);
+    if (scoreBreakdown) {
+      console.log(`📊 [AGENT] Scores: sales=${scoreBreakdown.scores.sales} support=${scoreBreakdown.scores.support} order=${scoreBreakdown.scores.order}`);
+      if (scoreBreakdown.isAmbiguous) console.log(`⚠️ [AGENT] Ambiguous routing: gap=${scoreBreakdown.gap}`);
+    }
     console.log('📊 [AGENT] Conversation history length:', conversationHistory.length);
     console.log('🛠️ [AGENT] Total tools available:', mcpClient.tools?.length || 0);
     console.log('════════════════════════════════════════════════════════\n');
 
-    // Track routing decision with confidence
+    // Track routing decision with confidence and score breakdown
     trackEvent(conversationId, shopId, 'routing_selected', {
       agentType: agent.name,
       routingReason,
       routingConfidence,
-      routingMethod
+      routingMethod,
+      isAmbiguous: scoreBreakdown?.isAmbiguous || false,
+      scoreGap: scoreBreakdown?.gap,
+      scores: scoreBreakdown?.scores
     });
 
     // Update context with agent type
