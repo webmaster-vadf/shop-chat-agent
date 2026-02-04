@@ -5,6 +5,7 @@
 import { Anthropic } from "@anthropic-ai/sdk";
 import AppConfig from "./config.server";
 import systemPrompts from "../prompts/prompts.json";
+import { enrichPromptWithContext } from "./context-manager.server";
 
 /**
  * Creates a Claude service instance
@@ -48,27 +49,13 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     // Get system prompt: use agent override if provided, otherwise from config
     let systemInstruction = _customSystemPrompt || getSystemPrompt(promptType, language);
 
-    // Enrich system prompt with conversation context (memory layer)
+    // Enrich system prompt with conversation context (via ContextManager)
     if (conversationContext) {
-      const ctxParts = [];
-      if (conversationContext.customerName) ctxParts.push(`Nom du client : ${conversationContext.customerName}`);
-      if (conversationContext.companyName) ctxParts.push(`Entreprise : ${conversationContext.companyName}`);
-      if (conversationContext.customerEmail) ctxParts.push(`Email : ${conversationContext.customerEmail}`);
-      if (conversationContext.accountStatus && conversationContext.accountStatus !== 'unknown') {
-        ctxParts.push(`Statut compte : ${conversationContext.accountStatus === 'pro' ? 'Professionnel vérifié' : 'Non-professionnel'}`);
+      const enriched = enrichPromptWithContext(systemInstruction, conversationContext);
+      if (enriched !== systemInstruction) {
+        console.log('   - Context enrichment added via ContextManager');
       }
-      if (conversationContext.lastIntent) ctxParts.push(`Dernière intention détectée : ${conversationContext.lastIntent}`);
-      if (conversationContext.messageCount > 1) ctxParts.push(`Messages échangés dans cette conversation : ${conversationContext.messageCount}`);
-      if (conversationContext.previousQuotes && conversationContext.previousQuotes.length > 0) {
-        const quotesSummary = conversationContext.previousQuotes.map(q =>
-          `Devis #${q.id.slice(-6)} (${q.status}) - ${q.totalAmount}${q.currency || '€'} - ${new Date(q.createdAt).toLocaleDateString('fr-FR')}`
-        ).join('; ');
-        ctxParts.push(`Devis précédents : ${quotesSummary}`);
-      }
-      if (ctxParts.length > 0) {
-        systemInstruction += `\n\n--- CONTEXTE CLIENT (mémoire de conversation) ---\n${ctxParts.join('\n')}`;
-        console.log('   - Context enrichment added:', ctxParts.length, 'fields');
-      }
+      systemInstruction = enriched;
     }
 
     console.log('   - System prompt length:', systemInstruction?.length || 0);

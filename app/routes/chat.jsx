@@ -4,7 +4,8 @@
  */
 import { json } from "@remix-run/node";
 import MCPClient from "../mcp-client";
-import { saveMessage, getConversationHistory, storeCustomerAccountUrl, getCustomerAccountUrl, getConversationContext, updateConversationContext, trackEvent, upsertConversationOutcome, getQuotesByConversation } from "../db.server";
+import { saveMessage, getConversationHistory, storeCustomerAccountUrl, getCustomerAccountUrl, trackEvent, upsertConversationOutcome } from "../db.server";
+import { loadContext, mergeContext } from "../services/context-manager.server";
 import AppConfig from "../services/config.server";
 import { createSseStream } from "../services/streaming.server";
 import { createClaudeService } from "../services/claude.server";
@@ -237,18 +238,15 @@ async function handleChatSession({
       };
     });
 
-    // Load conversation context for personalization
-    const conversationContext = await getConversationContext(conversationId);
-    // Load previous quotes for this conversation
-    const previousQuotes = await getQuotesByConversation(conversationId);
+    // Load full conversation context (context + quotes) in a single call
+    const conversationContext = await loadContext(conversationId);
     if (conversationContext) {
-      conversationContext.previousQuotes = previousQuotes;
       console.log('📋 [SESSION] Loaded conversation context:', {
         email: conversationContext.customerEmail,
         name: conversationContext.customerName,
         company: conversationContext.companyName,
         messageCount: conversationContext.messageCount,
-        quotes: previousQuotes.length
+        quotes: conversationContext.previousQuotes?.length || 0
       });
     }
 
@@ -288,7 +286,7 @@ async function handleChatSession({
       });
 
       // Update conversation context with extracted entities
-      updateConversationContext(conversationId, {
+      mergeContext(conversationId, {
         lastIntent: vadfIntent,
         customerEmail: extractedEntities.email || conversationContext?.customerEmail || undefined,
         customerName: extractedEntities.companyName || conversationContext?.customerName || undefined,
@@ -456,7 +454,7 @@ async function handleChatSession({
     });
 
     // Update context with agent type
-    updateConversationContext(conversationId, {
+    mergeContext(conversationId, {
       lastAgentType: agent.name
     }).catch(e => console.warn('[SESSION] Agent type update failed:', e.message));
 
