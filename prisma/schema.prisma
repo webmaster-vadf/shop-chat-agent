@@ -58,6 +58,9 @@ model Conversation {
   messages  Message[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  @@index([createdAt])
+  @@index([updatedAt])
 }
 
 model Message {
@@ -69,6 +72,7 @@ model Message {
   createdAt      DateTime     @default(now())
 
   @@index([conversationId])
+  @@index([createdAt])
 }
 
 model CustomerAccountUrl {
@@ -199,6 +203,7 @@ model MemoryFact {
   source         String?  // "user" | "tool" | "inference"
   lastSeenAt     DateTime @default(now())
 
+  @@unique([conversationId, key])
   @@index([conversationId])
   @@index([key])
 }
@@ -224,6 +229,8 @@ model Feedback {
 
   @@index([conversationId])
   @@index([rating])
+  @@index([shopId])
+  @@index([createdAt])
 }
 
 // --- Ticket 7: A/B Testing ---

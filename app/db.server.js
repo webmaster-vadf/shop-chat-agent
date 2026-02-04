@@ -652,24 +652,17 @@ export async function getMemoryFacts(conversationId) {
  */
 export async function upsertMemoryFact(conversationId, factData) {
   try {
-    const existing = await prisma.memoryFact.findFirst({
-      where: { conversationId, key: factData.key }
-    });
-
-    if (existing) {
-      return await prisma.memoryFact.update({
-        where: { id: existing.id },
-        data: {
-          value: factData.value,
-          confidence: factData.confidence ?? existing.confidence,
-          source: factData.source ?? existing.source,
-          lastSeenAt: new Date()
-        }
-      });
-    }
-
-    return await prisma.memoryFact.create({
-      data: {
+    return await prisma.memoryFact.upsert({
+      where: {
+        conversationId_key: { conversationId, key: factData.key }
+      },
+      update: {
+        value: factData.value,
+        confidence: factData.confidence ?? undefined,
+        source: factData.source ?? undefined,
+        lastSeenAt: new Date()
+      },
+      create: {
         conversationId,
         shopId: factData.shopId || null,
         key: factData.key,
