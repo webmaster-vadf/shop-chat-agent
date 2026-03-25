@@ -337,17 +337,39 @@ async function getCustomerMcpEndpoint(shopDomain, conversationId) {
  * @param {Request} request - The request object
  * @returns {Object} CORS headers object
  */
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map(o => o.trim())
+  .filter(Boolean);
+
+function getAllowedOrigin(request) {
+  const origin = request.headers.get("Origin");
+  if (!origin) return null;
+  // In development with no ALLOWED_ORIGINS configured, allow all origins
+  // In production, only allow explicitly listed origins
+  if (ALLOWED_ORIGINS.length === 0) {
+    return process.env.NODE_ENV === "development" ? origin : null;
+  }
+  return ALLOWED_ORIGINS.includes(origin) ? origin : null;
+}
+
 function getCorsHeaders(request) {
-  const origin = request.headers.get("Origin") || "*";
+  const allowedOrigin = getAllowedOrigin(request);
   const requestHeaders = request.headers.get("Access-Control-Request-Headers") || "Content-Type, Accept";
 
-  return {
-    "Access-Control-Allow-Origin": origin,
+  const headers = {
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": requestHeaders,
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Max-Age": "86400" // 24 hours
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin"
   };
+
+  if (allowedOrigin) {
+    headers["Access-Control-Allow-Origin"] = allowedOrigin;
+    headers["Access-Control-Allow-Credentials"] = "true";
+  }
+
+  return headers;
 }
 
 /**
@@ -356,15 +378,21 @@ function getCorsHeaders(request) {
  * @returns {Object} SSE headers object
  */
 function getSseHeaders(request) {
-  const origin = request.headers.get("Origin") || "*";
+  const allowedOrigin = getAllowedOrigin(request);
 
-  return {
+  const headers = {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
     "Connection": "keep-alive",
-    "Access-Control-Allow-Credentials": "true",
-    "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET,OPTIONS,POST",
-    "Access-Control-Allow-Headers": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version"
+    "Access-Control-Allow-Headers": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version",
+    "Vary": "Origin"
   };
+
+  if (allowedOrigin) {
+    headers["Access-Control-Allow-Origin"] = allowedOrigin;
+    headers["Access-Control-Allow-Credentials"] = "true";
+  }
+
+  return headers;
 }
