@@ -12,24 +12,22 @@ import { createToolService } from "../services/tool.server";
 import { unauthenticated } from "../shopify.server";
 
 // In-memory rate limiter: max 20 requests per minute per IP
-const rateLimitMap = new Map();
+// Persist map on globalThis so it survives Remix hot-reload
+if (!globalThis.__rateLimitMap) {
+  globalThis.__rateLimitMap = new Map();
+}
+const rateLimitMap = globalThis.__rateLimitMap;
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 
 function checkRateLimit(ip) {
   const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-
-  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
-    rateLimitMap.set(ip, { windowStart: now, count: 1 });
-    return true;
-  }
-
-  if (entry.count >= RATE_LIMIT_MAX) {
-    return false;
-  }
-
-  entry.count += 1;
+  const cutoff = now - RATE_LIMIT_WINDOW_MS;
+  const timestamps = rateLimitMap.get(ip) ?? [];
+  const recent = timestamps.filter(t => t > cutoff);
+  if (recent.length >= RATE_LIMIT_MAX) return false;
+  recent.push(now);
+  rateLimitMap.set(ip, recent);
   return true;
 }
 
@@ -48,8 +46,9 @@ if (typeof globalThis.__rateLimitCleanupRegistered === 'undefined') {
   globalThis.__rateLimitCleanupRegistered = true;
   setInterval(() => {
     const now = Date.now();
-    for (const [ip, entry] of rateLimitMap.entries()) {
-      if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    const cutoff = now - RATE_LIMIT_WINDOW_MS;
+    for (const [ip, timestamps] of rateLimitMap.entries()) {
+      if (timestamps.every(t => t <= cutoff)) {
         rateLimitMap.delete(ip);
       }
     }
@@ -121,7 +120,7 @@ async function handleChatRequest(request) {
     if (!checkRateLimit(clientIp)) {
       return new Response(
         JSON.stringify({ error: AppConfig.errorMessages.rateLimitExceeded }),
-        { status: 429, headers: { ...getSseHeaders(request), "Retry-After": "60" } }
+        { status: 429, headers: { ...getCorsHeaders(request), "Content-Type": "application/json", "Retry-After": "60" } }
       );
     }
 
