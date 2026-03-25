@@ -115,7 +115,7 @@ export class BaseAgent {
                     is_error: true
                   }]
                 });
-                stream.sendMessage({ type: 'new_message' });
+                stream.sendMessage({ type: 'end_turn' });
                 return;
               }
 

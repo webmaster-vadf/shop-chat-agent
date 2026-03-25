@@ -25,7 +25,7 @@ export function createStreamManager(encoder, controller) {
         logData.textPreview = logData.text.substring(0, 200) + '...';
         delete logData.text;
       }
-      console.log('📡 [SSE] Sending event:', JSON.stringify(logData));
+      if (process.env.DEBUG === 'true') console.log('📡 [SSE] Sending event:', JSON.stringify(logData));
 
       const text = `data: ${JSON.stringify(data)}\n\n`;
       controller.enqueue(encoder.encode(text));

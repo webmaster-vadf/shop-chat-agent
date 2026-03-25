@@ -65,7 +65,7 @@ export async function action({ request }) {
  * @returns {Response} JSON response with chat history
  */
 async function handleHistoryRequest(request, conversationId) {
-  const messages = await getConversationHistory(conversationId);
+  const messages = await getConversationHistory(conversationId, AppConfig.api.maxConversationHistory);
 
   return json(
     { messages },
@@ -264,7 +264,7 @@ async function handleChatSession({
       .catch(e => console.warn('[MEMORY] Fact extraction failed:', e.message));
 
     if (DEBUG) console.log('📚 [SESSION] Loading conversation history from database');
-    const dbMessages = await getConversationHistory(conversationId);
+    const dbMessages = await getConversationHistory(conversationId, AppConfig.api.maxConversationHistory);
     if (DEBUG) console.log('📊 [SESSION] Total messages in history:', dbMessages.length);
 
     conversationHistory = dbMessages.map(dbMessage => {
