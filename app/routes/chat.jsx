@@ -18,49 +18,6 @@ import { analyzeSentimentAsync } from "../services/sentiment.server.js";
 import { computeConversionScore } from "../services/analytics.server.js";
 import { getActiveExperiments, assignVariant } from "../services/experiments.server.js";
 
-// In-memory rate limiter: max 20 requests per minute per IP
-// Persist map on globalThis so it survives Remix hot-reload
-if (!globalThis.__rateLimitMap) {
-  globalThis.__rateLimitMap = new Map();
-}
-const rateLimitMap = globalThis.__rateLimitMap;
-const RATE_LIMIT_MAX = 20;
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-
-function checkRateLimit(ip) {
-  const now = Date.now();
-  const cutoff = now - RATE_LIMIT_WINDOW_MS;
-  const timestamps = rateLimitMap.get(ip) ?? [];
-  const recent = timestamps.filter(t => t > cutoff);
-  if (recent.length >= RATE_LIMIT_MAX) return false;
-  recent.push(now);
-  rateLimitMap.set(ip, recent);
-  return true;
-}
-
-function getClientIp(request) {
-  return (
-    request.headers.get("CF-Connecting-IP") ||
-    request.headers.get("X-Forwarded-For")?.split(",")[0].trim() ||
-    request.headers.get("X-Real-IP") ||
-    "unknown"
-  );
-}
-
-// Clean up old entries every 5 minutes to prevent memory leak.
-// Guard against duplicate intervals during Remix hot-reload in development.
-if (typeof globalThis.__rateLimitCleanupRegistered === 'undefined') {
-  globalThis.__rateLimitCleanupRegistered = true;
-  setInterval(() => {
-    const now = Date.now();
-    const cutoff = now - RATE_LIMIT_WINDOW_MS;
-    for (const [ip, timestamps] of rateLimitMap.entries()) {
-      if (timestamps.every(t => t <= cutoff)) {
-        rateLimitMap.delete(ip);
-      }
-    }
-  }, 5 * 60 * 1000);
-}
 
 /**
  * Remix loader function for handling GET requests
@@ -122,15 +79,6 @@ async function handleHistoryRequest(request, conversationId) {
  */
 async function handleChatRequest(request) {
   try {
-    // Rate limiting check
-    const clientIp = getClientIp(request);
-    if (!checkRateLimit(clientIp)) {
-      return new Response(
-        JSON.stringify({ error: AppConfig.errorMessages.rateLimitExceeded }),
-        { status: 429, headers: { ...getCorsHeaders(request), "Content-Type": "application/json", "Retry-After": "60" } }
-      );
-    }
-
     // Get message data from request body
     const body = await request.json();
     console.log('📨 [CHAT] Received request body:', JSON.stringify(body));
