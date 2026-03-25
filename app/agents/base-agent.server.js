@@ -4,7 +4,7 @@
  */
 import { saveMessage } from "../db.server";
 import { trackEvent } from "../db.server";
-import { DEBUG } from "../services/config.server";
+import { AppConfig, DEBUG } from "../services/config.server";
 
 export class BaseAgent {
   /**
@@ -50,8 +50,8 @@ export class BaseAgent {
 
     let finalMessage = { role: 'user' };
     let turnCount = 0;
-    const MAX_TURNS = 5;
-    const SESSION_TIMEOUT = 30000;
+    const MAX_TURNS = AppConfig.api.maxAgentTurns;
+    const SESSION_TIMEOUT = AppConfig.api.agentSessionTimeoutMs;
     const sessionStart = Date.now();
     let productsToDisplay = [];
 

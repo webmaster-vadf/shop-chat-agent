@@ -13,6 +13,9 @@ export const AppConfig = {
     maxTokens: 2000,
     defaultPromptType: 'vadfAssistant',
     maxMessageLength: 4000,  // ~1000 tokens
+    maxConversationHistory: 100,
+    maxAgentTurns: parseInt(process.env.MAX_AGENT_TURNS || '5', 10),
+    agentSessionTimeoutMs: parseInt(process.env.AGENT_SESSION_TIMEOUT_MS || '30000', 10),
   },
 
   // Error Message Templates
