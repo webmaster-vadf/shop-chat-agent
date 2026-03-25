@@ -7,6 +7,7 @@ import MCPClient from "../mcp-client";
 import { saveMessage, getConversationHistory, storeCustomerAccountUrl, getCustomerAccountUrl, trackEvent, upsertConversationOutcome, getConversationEvents } from "../db.server";
 import { loadContext, mergeContext, extractAndSaveFacts, updateSummaryIfNeeded } from "../services/context-manager.server";
 import AppConfig from "../services/config.server";
+import { DEBUG } from "../services/config.server";
 import { createSseStream } from "../services/streaming.server";
 import { createClaudeService } from "../services/claude.server";
 import { createToolService } from "../services/tool.server";
@@ -81,14 +82,14 @@ async function handleChatRequest(request) {
   try {
     // Get message data from request body
     const body = await request.json();
-    console.log('📨 [CHAT] Received request body:', JSON.stringify(body));
+    if (DEBUG) console.log('📨 [CHAT] Received request body:', JSON.stringify(body));
 
     const userMessage = body.message;
-    console.log('💬 [CHAT] User message:', userMessage);
+    if (DEBUG) console.log('💬 [CHAT] User message:', userMessage);
 
     // Validate required message
     if (!userMessage) {
-      console.log('❌ [CHAT] Missing message in request');
+      if (DEBUG) console.log('❌ [CHAT] Missing message in request');
       return new Response(
         JSON.stringify({ error: AppConfig.errorMessages.missingMessage }),
         { status: 400, headers: getSseHeaders(request) }
@@ -111,7 +112,7 @@ async function handleChatRequest(request) {
     // Rate limiting check
     const rateLimitResult = checkRateLimit(shopId, conversationId);
     if (!rateLimitResult.allowed) {
-      console.log(`[CHAT] Rate limit exceeded: ${rateLimitResult.reason}, retry after ${rateLimitResult.retryAfter}s`);
+      if (DEBUG) console.log(`[CHAT] Rate limit exceeded: ${rateLimitResult.reason}, retry after ${rateLimitResult.retryAfter}s`);
       return new Response(
         JSON.stringify({
           error: AppConfig.errorMessages.rateLimitExceeded,
@@ -128,10 +129,10 @@ async function handleChatRequest(request) {
       );
     }
 
-    console.log('🆔 [CHAT] Conversation ID:', conversationId);
-    console.log('⚙️ [CHAT] Prompt type:', promptType);
-    console.log('🔐 [CHAT] Shop ID:', shopId);
-    console.log('🌐 [CHAT] Origin:', request.headers.get("Origin"));
+    if (DEBUG) console.log('🆔 [CHAT] Conversation ID:', conversationId);
+    if (DEBUG) console.log('⚙️ [CHAT] Prompt type:', promptType);
+    if (DEBUG) console.log('🔐 [CHAT] Shop ID:', shopId);
+    if (DEBUG) console.log('🌐 [CHAT] Origin:', request.headers.get("Origin"));
 
     // Create a stream for the response
     const responseStream = createSseStream(async (stream) => {
@@ -172,10 +173,10 @@ async function handleChatSession({
   promptType,
   stream
 }) {
-  console.log('🚀 [SESSION] Starting chat session');
-  console.log('🆔 [SESSION] Conversation ID:', conversationId);
-  console.log('💬 [SESSION] User message:', userMessage);
-  console.log('⚙️ [SESSION] Prompt type:', promptType);
+  if (DEBUG) console.log('🚀 [SESSION] Starting chat session');
+  if (DEBUG) console.log('🆔 [SESSION] Conversation ID:', conversationId);
+  if (DEBUG) console.log('💬 [SESSION] User message:', userMessage);
+  if (DEBUG) console.log('⚙️ [SESSION] Prompt type:', promptType);
 
   // Initialize services
   const claudeService = createClaudeService();
@@ -184,11 +185,11 @@ async function handleChatSession({
   // Initialize MCP client
   const shopId = request.headers.get("X-Shopify-Shop-Id");
   const shopDomain = request.headers.get("Origin");
-  console.log('🏪 [SESSION] Shop domain:', shopDomain);
-  console.log('🔑 [SESSION] Shop ID:', shopId);
+  if (DEBUG) console.log('🏪 [SESSION] Shop domain:', shopDomain);
+  if (DEBUG) console.log('🔑 [SESSION] Shop ID:', shopId);
 
   const customerMcpEndpoint = await getCustomerMcpEndpoint(shopDomain, conversationId);
-  console.log('🔗 [SESSION] Customer MCP endpoint:', customerMcpEndpoint);
+  if (DEBUG) console.log('🔗 [SESSION] Customer MCP endpoint:', customerMcpEndpoint);
 
   const mcpClient = new MCPClient(
     shopDomain,
@@ -200,15 +201,15 @@ async function handleChatSession({
   try {
     // Send conversation ID to client
     stream.sendMessage({ type: 'id', conversation_id: conversationId });
-    console.log('📤 [SESSION] Sent conversation ID to client');
+    if (DEBUG) console.log('📤 [SESSION] Sent conversation ID to client');
 
     // Connect to MCP servers and get available tools
     let storefrontMcpTools = [], customerMcpTools = [];
     try {
       storefrontMcpTools = await mcpClient.connectToStorefrontServer();
       customerMcpTools = await mcpClient.connectToCustomerServer();
-      console.log(`Connected to MCP with ${storefrontMcpTools.length} tools`);
-      console.log(`Connected to customer MCP with ${customerMcpTools.length} tools`);
+      if (DEBUG) console.log(`Connected to MCP with ${storefrontMcpTools.length} tools`);
+      if (DEBUG) console.log(`Connected to customer MCP with ${customerMcpTools.length} tools`);
     } catch (error) {
       console.warn('Failed to connect to MCP servers, continuing without tools:', error.message);
     }
@@ -239,7 +240,7 @@ async function handleChatSession({
         }
       }
       if (Object.keys(experimentAssignments).length > 0) {
-        console.log(`🧪 [EXPERIMENT] Assigned variants:`, Object.entries(experimentAssignments).map(([k, v]) => `${k}=${v.variantKey}`).join(', '));
+        if (DEBUG) console.log(`🧪 [EXPERIMENT] Assigned variants:`, Object.entries(experimentAssignments).map(([k, v]) => `${k}=${v.variantKey}`).join(', '));
       }
     } catch (e) {
       console.warn('[EXPERIMENT] Assignment failed:', e.message);
@@ -247,7 +248,7 @@ async function handleChatSession({
     // --- FIN A/B TESTING ---
 
     // Sauvegarder le message utilisateur
-    console.log('💾 [SESSION] Saving user message to database');
+    if (DEBUG) console.log('💾 [SESSION] Saving user message to database');
     await saveMessage(conversationId, 'user', userMessage);
 
     // Track user message event
@@ -262,9 +263,9 @@ async function handleChatSession({
     extractAndSaveFacts(conversationId, userMessage, null, shopId)
       .catch(e => console.warn('[MEMORY] Fact extraction failed:', e.message));
 
-    console.log('📚 [SESSION] Loading conversation history from database');
+    if (DEBUG) console.log('📚 [SESSION] Loading conversation history from database');
     const dbMessages = await getConversationHistory(conversationId);
-    console.log('📊 [SESSION] Total messages in history:', dbMessages.length);
+    if (DEBUG) console.log('📊 [SESSION] Total messages in history:', dbMessages.length);
 
     conversationHistory = dbMessages.map(dbMessage => {
       let content;
@@ -282,7 +283,7 @@ async function handleChatSession({
     // Load full conversation context (context + quotes) in a single call
     const conversationContext = await loadContext(conversationId);
     if (conversationContext) {
-      console.log('📋 [SESSION] Loaded conversation context:', {
+      if (DEBUG) console.log('📋 [SESSION] Loaded conversation context:', {
         email: conversationContext.customerEmail,
         name: conversationContext.customerName,
         company: conversationContext.companyName,
@@ -291,8 +292,8 @@ async function handleChatSession({
       });
     }
 
-    console.log('📝 [SESSION] Parsed conversation history:', conversationHistory.length, 'messages');
-    if (conversationHistory.length > 0) {
+    if (DEBUG) console.log('📝 [SESSION] Parsed conversation history:', conversationHistory.length, 'messages');
+    if (DEBUG && conversationHistory.length > 0) {
       console.log('📜 [SESSION] Last 3 messages:', JSON.stringify(conversationHistory.slice(-3).map(m => ({
         role: m.role,
         contentPreview: typeof m.content === 'string' ? m.content.substring(0, 100) : '[Object]'
@@ -303,15 +304,15 @@ async function handleChatSession({
     let vadfIntent = undefined; // hoisted for orchestrator access
     let vadfConfidence = undefined; // hoisted for hybrid scoring
     if (promptType === 'vadfAssistant' || promptType === 'vadfAutonomousAgent') {
-      console.log('\n\n════════════════════════════════════════════════════════');
-      console.log('🚀🚀🚀 [CHAT] VADF MODE ACTIVATED 🚀🚀🚀');
-      console.log('📝 [CHAT] User message:', userMessage);
-      console.log('📝 [CHAT] Message length:', userMessage?.length);
-      console.log('════════════════════════════════════════════════════════\n');
+      if (DEBUG) console.log('\n\n════════════════════════════════════════════════════════');
+      if (DEBUG) console.log('🚀🚀🚀 [CHAT] VADF MODE ACTIVATED 🚀🚀🚀');
+      if (DEBUG) console.log('📝 [CHAT] User message:', userMessage);
+      if (DEBUG) console.log('📝 [CHAT] Message length:', userMessage?.length);
+      if (DEBUG) console.log('════════════════════════════════════════════════════════\n');
 
       // Utilisation du gestionnaire VADF asynchrone
       const vadfManager = await getVadfManager();
-      console.log('✅ [CHAT] VADF Manager loaded');
+      if (DEBUG) console.log('✅ [CHAT] VADF Manager loaded');
 
       // Classification IA avec fallback regex
       const classification = await vadfManager.classifyWithAI(userMessage, conversationHistory);
@@ -337,12 +338,12 @@ async function handleChatSession({
         extractedEntities: JSON.stringify(extractedEntities)
       }).catch(e => console.warn('[SESSION] Context update failed:', e.message));
 
-      console.log('\n🔍🔍🔍 [CHAT] ===== INTENT DETECTION RESULT ===== 🔍🔍🔍');
-      console.log('🔍 [CHAT] Detected intent:', vadfIntent);
-      console.log('🔍 [CHAT] Confidence:', confidence);
-      console.log('🔍 [CHAT] Source:', classification.source);
-      console.log('🔍 [CHAT] Entities:', JSON.stringify(extractedEntities));
-      console.log('════════════════════════════════════════════════════════\n');
+      if (DEBUG) console.log('\n🔍🔍🔍 [CHAT] ===== INTENT DETECTION RESULT ===== 🔍🔍🔍');
+      if (DEBUG) console.log('🔍 [CHAT] Detected intent:', vadfIntent);
+      if (DEBUG) console.log('🔍 [CHAT] Confidence:', confidence);
+      if (DEBUG) console.log('🔍 [CHAT] Source:', classification.source);
+      if (DEBUG) console.log('🔍 [CHAT] Entities:', JSON.stringify(extractedEntities));
+      if (DEBUG) console.log('════════════════════════════════════════════════════════\n');
 
       // Routing basé sur la confiance et le type d'intent
       const shouldUseMcp = !vadfIntent
@@ -352,23 +353,23 @@ async function handleChatSession({
         || (confidence < 0.5);
 
       if (shouldUseMcp) {
-        console.log('\n⚠️⚠️⚠️ [CHAT] ===== MCP FALLBACK TRIGGERED ===== ⚠️⚠️⚠️');
-        console.log('🔄 [CHAT] Routing to Claude + Shopify MCP');
-        console.log('🔄 [CHAT] Reason:', classification.source || 'low_confidence');
-        console.log('🛍️ [CHAT] Available Storefront MCP tools:', storefrontMcpTools.length);
-        console.log('👤 [CHAT] Available Customer MCP tools:', customerMcpTools.length);
-        console.log('📝 [CHAT] Claude will search shop data for: "' + userMessage + '"');
-        console.log('════════════════════════════════════════════════════════\n');
+        if (DEBUG) console.log('\n⚠️⚠️⚠️ [CHAT] ===== MCP FALLBACK TRIGGERED ===== ⚠️⚠️⚠️');
+        if (DEBUG) console.log('🔄 [CHAT] Routing to Claude + Shopify MCP');
+        if (DEBUG) console.log('🔄 [CHAT] Reason:', classification.source || 'low_confidence');
+        if (DEBUG) console.log('🛍️ [CHAT] Available Storefront MCP tools:', storefrontMcpTools.length);
+        if (DEBUG) console.log('👤 [CHAT] Available Customer MCP tools:', customerMcpTools.length);
+        if (DEBUG) console.log('📝 [CHAT] Claude will search shop data for: "' + userMessage + '"');
+        if (DEBUG) console.log('════════════════════════════════════════════════════════\n');
         // Ne pas retourner ici, laisser continuer vers le flux Claude
       } else {
         // Intent VADF spécifique détecté, traiter avec le système VADF
-        console.log('✅ [CHAT] VADF-specific intent detected:', vadfIntent, '(confidence:', confidence, ')');
-        console.log('════════════════════════════════════════════════════════');
+        if (DEBUG) console.log('✅ [CHAT] VADF-specific intent detected:', vadfIntent, '(confidence:', confidence, ')');
+        if (DEBUG) console.log('════════════════════════════════════════════════════════');
 
         let vadfContext = vadfManager.enrichContext({
           isFirstMessage: conversationHistory.length <= 1
         });
-        console.log('📋 [CHAT] Initial context:', vadfContext);
+        if (DEBUG) console.log('📋 [CHAT] Initial context:', vadfContext);
 
         // Utiliser les entités extraites par l'IA (email, companyName, etc.)
         const email = extractedEntities.email || undefined;
@@ -376,14 +377,14 @@ async function handleChatSession({
         // Vérification du compte client si l'intention concerne le compte
         let accountCheckResult = null;
         if (["mot_de_passe_oublie", "mise_a_jour_infos_entreprise"].includes(vadfIntent)) {
-          console.log('👤 [CHAT] Account-related intent detected:', vadfIntent);
+          if (DEBUG) console.log('👤 [CHAT] Account-related intent detected:', vadfIntent);
 
           if (email) {
-            console.log('📧 [CHAT] Email extracted by AI classifier:', email);
+            if (DEBUG) console.log('📧 [CHAT] Email extracted by AI classifier:', email);
             accountCheckResult = await checkVadfCustomerAccount({ email });
-            console.log('✅ [CHAT] Account check result:', JSON.stringify(accountCheckResult, null, 2));
+            if (DEBUG) console.log('✅ [CHAT] Account check result:', JSON.stringify(accountCheckResult, null, 2));
           } else {
-            console.log('⚠️ [CHAT] No email found, skipping account check');
+            if (DEBUG) console.log('⚠️ [CHAT] No email found, skipping account check');
           }
 
           // Adapter le contexte selon le statut du compte
@@ -393,7 +394,7 @@ async function handleChatSession({
             vadfContext = { ...vadfContext, compte_actif: false };
           }
         } else if (vadfIntent === 'activation_compte') {
-          console.log('👤 [CHAT] activation_compte intent - using default VADF response');
+          if (DEBUG) console.log('👤 [CHAT] activation_compte intent - using default VADF response');
         }
 
         // Enrichir le contexte avec les entités IA et le résultat du check
@@ -415,14 +416,14 @@ async function handleChatSession({
         }
 
         let vadfResponse = vadfManager.getResponse(vadfIntent, vadfContext);
-        console.log('📤 [CHAT] VADF response: type=', vadfResponse.type, ', text length=', vadfResponse.text?.length);
+        if (DEBUG) console.log('📤 [CHAT] VADF response: type=', vadfResponse.type, ', text length=', vadfResponse.text?.length);
 
         // Override si le check de compte a un message spécifique
         const shouldUseAccountMessage = accountCheckResult && accountCheckResult.message
           && !(vadfIntent === 'activation_compte' && accountCheckResult.status === 'not_found');
 
         if (shouldUseAccountMessage) {
-          console.log('⚠️ [CHAT] OVERRIDE: Using account check message');
+          if (DEBUG) console.log('⚠️ [CHAT] OVERRIDE: Using account check message');
           vadfResponse = { ...vadfResponse, text: accountCheckResult.message };
         }
 
@@ -471,7 +472,7 @@ async function handleChatSession({
           upsertConversationOutcome(conversationId, { outcome: 'resolved', shopId });
         }
 
-        console.log('✅ [CHAT] VADF response complete, sending end_turn');
+        if (DEBUG) console.log('✅ [CHAT] VADF response complete, sending end_turn');
         stream.sendMessage({ type: 'end_turn' });
 
         // Compute and persist conversion score (non-blocking)
@@ -479,7 +480,7 @@ async function handleChatSession({
           const score = computeConversionScore(events);
           if (score > 0) {
             upsertConversationOutcome(conversationId, { conversionScore: score, shopId });
-            console.log(`📈 [CONVERSION] Score: ${score} for conversation ${conversationId}`);
+            if (DEBUG) console.log(`📈 [CONVERSION] Score: ${score} for conversation ${conversationId}`);
           }
         }).catch(e => console.warn('[CONVERSION] Score computation failed:', e.message));
 
@@ -494,15 +495,15 @@ async function handleChatSession({
 
     const { agent, routingReason, routingConfidence, routingMethod, scoreBreakdown } = orchestrator.route(userMessage, vadfIntent, conversationContext, vadfConfidence);
 
-    console.log('\n\n════════════════════════════════════════════════════════');
-    console.log(`🤖 [AGENT] Routed to: ${agent.name} (reason: ${routingReason}, confidence: ${routingConfidence}, method: ${routingMethod})`);
-    if (scoreBreakdown) {
+    if (DEBUG) console.log('\n\n════════════════════════════════════════════════════════');
+    if (DEBUG) console.log(`🤖 [AGENT] Routed to: ${agent.name} (reason: ${routingReason}, confidence: ${routingConfidence}, method: ${routingMethod})`);
+    if (DEBUG && scoreBreakdown) {
       console.log(`📊 [AGENT] Scores: sales=${scoreBreakdown.scores.sales} support=${scoreBreakdown.scores.support} order=${scoreBreakdown.scores.order}`);
       if (scoreBreakdown.isAmbiguous) console.log(`⚠️ [AGENT] Ambiguous routing: gap=${scoreBreakdown.gap}`);
     }
-    console.log('📊 [AGENT] Conversation history length:', conversationHistory.length);
-    console.log('🛠️ [AGENT] Total tools available:', mcpClient.tools?.length || 0);
-    console.log('════════════════════════════════════════════════════════\n');
+    if (DEBUG) console.log('📊 [AGENT] Conversation history length:', conversationHistory.length);
+    if (DEBUG) console.log('🛠️ [AGENT] Total tools available:', mcpClient.tools?.length || 0);
+    if (DEBUG) console.log('════════════════════════════════════════════════════════\n');
 
     // Track routing decision with confidence and score breakdown
     trackEvent(conversationId, shopId, 'routing_selected', {
@@ -526,11 +527,11 @@ async function handleChatSession({
       conversationId, shopId
     });
 
-    console.log('\n════════════════════════════════════════════════════════');
-    console.log(`🏁 [AGENT:${agent.name}] Conversation complete`);
-    console.log('   - Total turns:', turnCount);
-    console.log('   - Products to display:', productsToDisplay.length);
-    console.log('════════════════════════════════════════════════════════\n');
+    if (DEBUG) console.log('\n════════════════════════════════════════════════════════');
+    if (DEBUG) console.log(`🏁 [AGENT:${agent.name}] Conversation complete`);
+    if (DEBUG) console.log('   - Total turns:', turnCount);
+    if (DEBUG) console.log('   - Products to display:', productsToDisplay.length);
+    if (DEBUG) console.log('════════════════════════════════════════════════════════\n');
 
     stream.sendMessage({ type: 'end_turn' });
 
@@ -546,7 +547,7 @@ async function handleChatSession({
     });
 
     if (productsToDisplay.length > 0) {
-      console.log(`🛍️ [AGENT:${agent.name}] Sending product results:`, productsToDisplay.length, 'products');
+      if (DEBUG) console.log(`🛍️ [AGENT:${agent.name}] Sending product results:`, productsToDisplay.length, 'products');
       stream.sendMessage({
         type: 'product_results',
         products: productsToDisplay
@@ -563,7 +564,7 @@ async function handleChatSession({
       const score = computeConversionScore(events);
       if (score > 0) {
         upsertConversationOutcome(conversationId, { conversionScore: score, shopId });
-        console.log(`📈 [CONVERSION] Score: ${score} for conversation ${conversationId}`);
+        if (DEBUG) console.log(`📈 [CONVERSION] Score: ${score} for conversation ${conversationId}`);
       }
     }).catch(e => console.warn('[CONVERSION] Score computation failed:', e.message));
   } catch (error) {

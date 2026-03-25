@@ -4,6 +4,7 @@
  */
 import { saveMessage } from "../db.server";
 import { trackEvent } from "../db.server";
+import { DEBUG } from "../services/config.server";
 
 export class BaseAgent {
   /**
@@ -44,8 +45,8 @@ export class BaseAgent {
               stream, conversationContext, conversationId, shopId }) {
     const agentTools = this.getFilteredTools(mcpClient.tools);
 
-    console.log(`\n[AGENT:${this.name}] Starting with ${agentTools.length} tools`);
-    console.log(`[AGENT:${this.name}] Tools: ${agentTools.map(t => t.name).join(', ')}`);
+    if (DEBUG) console.log(`\n[AGENT:${this.name}] Starting with ${agentTools.length} tools`);
+    if (DEBUG) console.log(`[AGENT:${this.name}] Tools: ${agentTools.map(t => t.name).join(', ')}`);
 
     let finalMessage = { role: 'user' };
     let turnCount = 0;
@@ -66,7 +67,7 @@ export class BaseAgent {
       }
 
       turnCount++;
-      console.log(`[AGENT:${this.name}] Turn ${turnCount}/${MAX_TURNS}`);
+      if (DEBUG) console.log(`[AGENT:${this.name}] Turn ${turnCount}/${MAX_TURNS}`);
 
       try {
         finalMessage = await claudeService.streamConversation(
@@ -105,7 +106,7 @@ export class BaseAgent {
                 argsPreview: JSON.stringify(toolArgs).substring(0, 200)
               });
 
-              console.log(`[AGENT:${this.name}] Tool call: ${toolName}`);
+              if (DEBUG) console.log(`[AGENT:${this.name}] Tool call: ${toolName}`);
 
               stream.sendMessage({
                 type: 'tool_use',
@@ -139,7 +140,7 @@ export class BaseAgent {
           }
         );
 
-        console.log(`[AGENT:${this.name}] Turn ${turnCount} complete, stop_reason: ${finalMessage.stop_reason}`);
+        if (DEBUG) console.log(`[AGENT:${this.name}] Turn ${turnCount} complete, stop_reason: ${finalMessage.stop_reason}`);
       } catch (turnError) {
         console.error(`[AGENT:${this.name}] Error in turn ${turnCount}:`, turnError.message);
         trackEvent(conversationId, shopId, 'turn_error', {
@@ -163,7 +164,7 @@ export class BaseAgent {
       }
     }
 
-    console.log(`[AGENT:${this.name}] Complete: ${turnCount} turns, ${productsToDisplay.length} products`);
+    if (DEBUG) console.log(`[AGENT:${this.name}] Complete: ${turnCount} turns, ${productsToDisplay.length} products`);
 
     return { productsToDisplay, turnCount };
   }

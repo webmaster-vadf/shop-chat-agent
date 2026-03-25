@@ -3,7 +3,7 @@
  * Manages interactions with the Claude API
  */
 import { Anthropic } from "@anthropic-ai/sdk";
-import AppConfig from "./config.server";
+import AppConfig, { DEBUG } from "./config.server";
 import systemPrompts from "../prompts/prompts.json";
 import { enrichPromptWithContext } from "./context-manager.server";
 
@@ -37,14 +37,14 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     conversationContext,
     _customSystemPrompt
   }, streamHandlers) => {
-    console.log('\n🔵 [CLAUDE-SERVICE] streamConversation called');
-    console.log('   - Prompt type:', promptType);
-    console.log('   - Language:', language);
-    console.log('   - Messages count:', messages?.length || 0);
-    console.log('   - Tools count:', tools?.length || 0);
-    console.log('   - Model:', AppConfig.api.defaultModel);
-    console.log('   - Max tokens:', AppConfig.api.maxTokens);
-    if (_customSystemPrompt) console.log('   - Using custom system prompt (agent override)');
+    if (DEBUG) console.log('\n🔵 [CLAUDE-SERVICE] streamConversation called');
+    if (DEBUG) console.log('   - Prompt type:', promptType);
+    if (DEBUG) console.log('   - Language:', language);
+    if (DEBUG) console.log('   - Messages count:', messages?.length || 0);
+    if (DEBUG) console.log('   - Tools count:', tools?.length || 0);
+    if (DEBUG) console.log('   - Model:', AppConfig.api.defaultModel);
+    if (DEBUG) console.log('   - Max tokens:', AppConfig.api.maxTokens);
+    if (DEBUG && _customSystemPrompt) console.log('   - Using custom system prompt (agent override)');
 
     // Get system prompt: use agent override if provided, otherwise from config
     let systemInstruction = _customSystemPrompt || getSystemPrompt(promptType, language);
@@ -52,18 +52,18 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     // Enrich system prompt with conversation context (via ContextManager)
     if (conversationContext) {
       const enriched = enrichPromptWithContext(systemInstruction, conversationContext);
-      if (enriched !== systemInstruction) {
+      if (DEBUG && enriched !== systemInstruction) {
         console.log('   - Context enrichment added via ContextManager');
       }
       systemInstruction = enriched;
     }
 
-    console.log('   - System prompt length:', systemInstruction?.length || 0);
-    console.log('   - System prompt preview:', systemInstruction?.substring(0, 100) + '...');
+    if (DEBUG) console.log('   - System prompt length:', systemInstruction?.length || 0);
+    if (DEBUG) console.log('   - System prompt preview:', systemInstruction?.substring(0, 100) + '...');
 
     // Log last user message
     const lastMessage = messages?.[messages.length - 1];
-    if (lastMessage) {
+    if (DEBUG && lastMessage) {
       console.log('   - Last message role:', lastMessage.role);
       const contentPreview = typeof lastMessage.content === 'string'
         ? lastMessage.content.substring(0, 100)
@@ -71,7 +71,7 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
       console.log('   - Last message preview:', contentPreview + '...');
     }
 
-    console.log('🚀 [CLAUDE-SERVICE] Creating message stream...');
+    if (DEBUG) console.log('🚀 [CLAUDE-SERVICE] Creating message stream...');
 
     // Create stream
     const stream = await anthropic.messages.stream({
@@ -82,53 +82,53 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
       tools: tools && tools.length > 0 ? tools : undefined
     });
 
-    console.log('✅ [CLAUDE-SERVICE] Stream created successfully');
+    if (DEBUG) console.log('✅ [CLAUDE-SERVICE] Stream created successfully');
 
     // Set up event handlers
     if (streamHandlers.onText) {
       stream.on('text', streamHandlers.onText);
-      console.log('   - onText handler registered');
+      if (DEBUG) console.log('   - onText handler registered');
     }
 
     if (streamHandlers.onMessage) {
       stream.on('message', streamHandlers.onMessage);
-      console.log('   - onMessage handler registered');
+      if (DEBUG) console.log('   - onMessage handler registered');
     }
 
     if (streamHandlers.onContentBlock) {
       stream.on('contentBlock', streamHandlers.onContentBlock);
-      console.log('   - onContentBlock handler registered');
+      if (DEBUG) console.log('   - onContentBlock handler registered');
     }
 
-    console.log('⏳ [CLAUDE-SERVICE] Waiting for final message...');
+    if (DEBUG) console.log('⏳ [CLAUDE-SERVICE] Waiting for final message...');
 
     // Wait for final message
     const finalMessage = await stream.finalMessage();
 
-    console.log('✅ [CLAUDE-SERVICE] Final message received');
-    console.log('   - Stop reason:', finalMessage.stop_reason);
-    console.log('   - Content blocks:', finalMessage.content?.length || 0);
-    finalMessage.content?.forEach((block, idx) => {
+    if (DEBUG) console.log('✅ [CLAUDE-SERVICE] Final message received');
+    if (DEBUG) console.log('   - Stop reason:', finalMessage.stop_reason);
+    if (DEBUG) console.log('   - Content blocks:', finalMessage.content?.length || 0);
+    if (DEBUG) finalMessage.content?.forEach((block, idx) => {
       console.log(`   - Block[${idx}]:`, block.type);
     });
 
     // Process tool use requests
     if (streamHandlers.onToolUse && finalMessage.content) {
-      console.log('🔍 [CLAUDE-SERVICE] Checking for tool use in final message');
+      if (DEBUG) console.log('🔍 [CLAUDE-SERVICE] Checking for tool use in final message');
       let toolUseCount = 0;
       for (const content of finalMessage.content) {
         if (content.type === "tool_use") {
           toolUseCount++;
-          console.log(`🔧 [CLAUDE-SERVICE] Processing tool use ${toolUseCount}:`, content.name);
+          if (DEBUG) console.log(`🔧 [CLAUDE-SERVICE] Processing tool use ${toolUseCount}:`, content.name);
           await streamHandlers.onToolUse(content);
         }
       }
-      if (toolUseCount === 0) {
+      if (DEBUG && toolUseCount === 0) {
         console.log('   - No tool use found in final message');
       }
     }
 
-    console.log('🔵 [CLAUDE-SERVICE] streamConversation completed\n');
+    if (DEBUG) console.log('🔵 [CLAUDE-SERVICE] streamConversation completed\n');
 
     return finalMessage;
   };

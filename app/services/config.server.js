@@ -3,6 +3,9 @@
  * Centralizes all configuration values for the chat service
  */
 
+/** @type {boolean} */
+export const DEBUG = process.env.DEBUG === 'true';
+
 export const AppConfig = {
   // API Configuration
   api: {
