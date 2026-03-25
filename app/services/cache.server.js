@@ -118,12 +118,27 @@ export function productSearchKey(query) {
 }
 
 /**
+ * Fast djb2 hash for cache keys — avoids key collision from substring truncation
+ * @param {string} str
+ * @returns {string} hex-like hash string
+ */
+function djb2Hash(str) {
+  let hash = 5381;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) + hash) ^ str.charCodeAt(i);
+    hash = hash >>> 0; // keep unsigned 32-bit
+  }
+  return hash.toString(36);
+}
+
+/**
  * Generate a cache key for intent classification
  * @param {string} message - User message
  * @returns {string}
  */
 export function intentClassificationKey(message) {
-  return `intent:${message.toLowerCase().trim().substring(0, 200)}`;
+  const normalized = message.toLowerCase().trim();
+  return `intent:${djb2Hash(normalized)}`;
 }
 
 export default appCache;
