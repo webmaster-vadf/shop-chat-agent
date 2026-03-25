@@ -11,6 +11,50 @@ import { createClaudeService } from "../services/claude.server";
 import { createToolService } from "../services/tool.server";
 import { unauthenticated } from "../shopify.server";
 
+// In-memory rate limiter: max 20 requests per minute per IP
+const rateLimitMap = new Map();
+const RATE_LIMIT_MAX = 20;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+
+  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    rateLimitMap.set(ip, { windowStart: now, count: 1 });
+    return true;
+  }
+
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return false;
+  }
+
+  entry.count += 1;
+  return true;
+}
+
+function getClientIp(request) {
+  return (
+    request.headers.get("CF-Connecting-IP") ||
+    request.headers.get("X-Forwarded-For")?.split(",")[0].trim() ||
+    request.headers.get("X-Real-IP") ||
+    "unknown"
+  );
+}
+
+// Clean up old entries every 5 minutes to prevent memory leak.
+// Guard against duplicate intervals during Remix hot-reload in development.
+if (typeof globalThis.__rateLimitCleanupRegistered === 'undefined') {
+  globalThis.__rateLimitCleanupRegistered = true;
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, entry] of rateLimitMap.entries()) {
+      if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+        rateLimitMap.delete(ip);
+      }
+    }
+  }, 5 * 60 * 1000);
+}
 
 /**
  * Remix loader function for handling GET requests
@@ -72,6 +116,15 @@ async function handleHistoryRequest(request, conversationId) {
  */
 async function handleChatRequest(request) {
   try {
+    // Rate limiting check
+    const clientIp = getClientIp(request);
+    if (!checkRateLimit(clientIp)) {
+      return new Response(
+        JSON.stringify({ error: AppConfig.errorMessages.rateLimitExceeded }),
+        { status: 429, headers: { ...getSseHeaders(request), "Retry-After": "60" } }
+      );
+    }
+
     // Get message data from request body
     const body = await request.json();
     const userMessage = body.message;
