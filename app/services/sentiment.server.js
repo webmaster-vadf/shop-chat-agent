@@ -88,5 +88,6 @@ export async function analyzeSentiment(message, conversationId, shopId) {
  */
 export function analyzeSentimentAsync(message, conversationId, shopId) {
   // Fire and forget - don't await
-  analyzeSentiment(message, conversationId, shopId).catch(() => {});
+  analyzeSentiment(message, conversationId, shopId)
+    .catch(e => console.warn('[SENTIMENT] Background analysis failed:', e.message));
 }
