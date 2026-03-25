@@ -1,0 +1,55 @@
+# Summary
+metric,value
+totalConversations,98
+totalEvents,1616
+totalErrors,0
+totalToolCalls,2
+totalOutcomes,9
+totalFeedback,0
+
+# Intent Distribution
+intent,count
+unknown,61
+salutation,28
+escalade_support,21
+tarifs,21
+mot_de_passe_oublie,20
+decouvrir_produits,17
+creation_compte,16
+personnalisation,16
+commander_produits,16
+mise_a_jour_infos_entreprise,15
+stock_indisponible,15
+devis,15
+erreur_generique,13
+faq,13
+b2b_only,13
+reliquat,13
+origine_produit,12
+materiaux,12
+fabrication,12
+fiches_techniques,12
+
+# Tool Usage
+tool,count
+get_most_recent_order_status,1
+search_shop_catalog,1
+
+# Outcomes
+outcome,count
+escalated,9
+
+# Sentiment
+sentiment,count
+positive,0
+neutral,0
+negative,0
+
+# Feedback
+up,0
+down,0
+satisfaction_rate,N/A
+
+# Top Problems
+type,severity,description
+high_escalation,high,Taux d'escalade: 100% (9/9)

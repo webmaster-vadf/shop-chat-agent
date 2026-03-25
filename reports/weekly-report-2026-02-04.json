@@ -1,0 +1,145 @@
+{
+  "period": {
+    "start": "2026-01-28T15:00:35.812Z",
+    "end": "2026-02-04T15:00:35.812Z"
+  },
+  "summary": {
+    "totalConversations": 98,
+    "totalEvents": 1616,
+    "totalErrors": 0,
+    "totalToolCalls": 2,
+    "totalOutcomes": 9,
+    "totalFeedback": 0
+  },
+  "intents": {
+    "distribution": [
+      {
+        "key": "unknown",
+        "count": 61
+      },
+      {
+        "key": "salutation",
+        "count": 28
+      },
+      {
+        "key": "escalade_support",
+        "count": 21
+      },
+      {
+        "key": "tarifs",
+        "count": 21
+      },
+      {
+        "key": "mot_de_passe_oublie",
+        "count": 20
+      },
+      {
+        "key": "decouvrir_produits",
+        "count": 17
+      },
+      {
+        "key": "creation_compte",
+        "count": 16
+      },
+      {
+        "key": "personnalisation",
+        "count": 16
+      },
+      {
+        "key": "commander_produits",
+        "count": 16
+      },
+      {
+        "key": "mise_a_jour_infos_entreprise",
+        "count": 15
+      },
+      {
+        "key": "stock_indisponible",
+        "count": 15
+      },
+      {
+        "key": "devis",
+        "count": 15
+      },
+      {
+        "key": "erreur_generique",
+        "count": 13
+      },
+      {
+        "key": "faq",
+        "count": 13
+      },
+      {
+        "key": "b2b_only",
+        "count": 13
+      },
+      {
+        "key": "reliquat",
+        "count": 13
+      },
+      {
+        "key": "origine_produit",
+        "count": 12
+      },
+      {
+        "key": "materiaux",
+        "count": 12
+      },
+      {
+        "key": "fabrication",
+        "count": 12
+      },
+      {
+        "key": "fiches_techniques",
+        "count": 12
+      }
+    ],
+    "sources": {
+      "regex": 188,
+      "ai_high_confidence": 92,
+      "ai_generic": 51,
+      "ai_fallback": 61
+    },
+    "unknownCount": 61
+  },
+  "tools": {
+    "usage": [
+      {
+        "key": "get_most_recent_order_status",
+        "count": 1
+      },
+      {
+        "key": "search_shop_catalog",
+        "count": 1
+      }
+    ],
+    "errors": {},
+    "totalCalls": 2
+  },
+  "outcomes": {
+    "escalated": 9
+  },
+  "sentiment": {
+    "positive": 0,
+    "neutral": 0,
+    "negative": 0
+  },
+  "feedback": {
+    "up": 0,
+    "down": 0,
+    "satisfactionRate": null,
+    "negativeComments": []
+  },
+  "routing": {
+    "ambiguousCount": 0
+  },
+  "topProblems": [
+    {
+      "type": "high_escalation",
+      "severity": "high",
+      "description": "Taux d'escalade: 100% (9/9)",
+      "details": []
+    }
+  ],
+  "generatedAt": "2026-02-04T15:00:36.409Z"
+}
