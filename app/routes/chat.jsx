@@ -337,6 +337,7 @@ async function getCustomerMcpEndpoint(shopDomain, conversationId) {
  * @param {Request} request - The request object
  * @returns {Object} CORS headers object
  */
+// Parsed once at startup — requires process restart after changing ALLOWED_ORIGINS in .env
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map(o => o.trim())
@@ -345,8 +346,10 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
 function getAllowedOrigin(request) {
   const origin = request.headers.get("Origin");
   if (!origin) return null;
-  // In development with no ALLOWED_ORIGINS configured, allow all origins
-  // In production, only allow explicitly listed origins
+  // When ALLOWED_ORIGINS is empty:
+  //   - NODE_ENV=development → permissive (allow all origins for local dev)
+  //   - NODE_ENV=production or unset → block (require explicit allowlist in prod)
+  // Set NODE_ENV=development in your .env for local development.
   if (ALLOWED_ORIGINS.length === 0) {
     return process.env.NODE_ENV === "development" ? origin : null;
   }
