@@ -196,14 +196,16 @@ export async function saveMessage(conversationId, role, content) {
  * @param {string} conversationId - The conversation ID
  * @returns {Promise<Array>} - Array of messages in the conversation
  */
-export async function getConversationHistory(conversationId) {
+export async function getConversationHistory(conversationId, limit = 100) {
   try {
     const messages = await prisma.message.findMany({
       where: { conversationId },
-      orderBy: { createdAt: 'asc' }
+      orderBy: { createdAt: 'desc' },
+      take: limit
     });
 
-    return messages;
+    // Return in chronological order (oldest first for Claude context)
+    return messages.reverse();
   } catch (error) {
     console.error('Error retrieving conversation history:', error);
     return [];
