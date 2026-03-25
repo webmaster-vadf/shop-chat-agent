@@ -4,12 +4,19 @@
  */
 import { json } from "@remix-run/node";
 import MCPClient from "../mcp-client";
-import { saveMessage, getConversationHistory, storeCustomerAccountUrl, getCustomerAccountUrl } from "../db.server";
+import { saveMessage, getConversationHistory, storeCustomerAccountUrl, getCustomerAccountUrl, trackEvent, upsertConversationOutcome, getConversationEvents } from "../db.server";
+import { loadContext, mergeContext, extractAndSaveFacts, updateSummaryIfNeeded } from "../services/context-manager.server";
 import AppConfig from "../services/config.server";
 import { createSseStream } from "../services/streaming.server";
 import { createClaudeService } from "../services/claude.server";
 import { createToolService } from "../services/tool.server";
 import { unauthenticated } from "../shopify.server";
+import { getVadfManager } from "../services/vadf-response-manager.js";
+import { checkVadfCustomerAccount } from "../services/vadf-customer-account.server.js";
+import { checkRateLimit } from "../services/rate-limiter.server.js";
+import { analyzeSentimentAsync } from "../services/sentiment.server.js";
+import { computeConversionScore } from "../services/analytics.server.js";
+import { getActiveExperiments, assignVariant } from "../services/experiments.server.js";
 
 // In-memory rate limiter: max 20 requests per minute per IP
 // Persist map on globalThis so it survives Remix hot-reload
@@ -126,10 +133,14 @@ async function handleChatRequest(request) {
 
     // Get message data from request body
     const body = await request.json();
+    console.log('📨 [CHAT] Received request body:', JSON.stringify(body));
+
     const userMessage = body.message;
+    console.log('💬 [CHAT] User message:', userMessage);
 
     // Validate required message
     if (!userMessage) {
+      console.log('❌ [CHAT] Missing message in request');
       return new Response(
         JSON.stringify({ error: AppConfig.errorMessages.missingMessage }),
         { status: 400, headers: getSseHeaders(request) }
@@ -147,6 +158,32 @@ async function handleChatRequest(request) {
     // Generate or use existing conversation ID
     const conversationId = body.conversation_id || Date.now().toString();
     const promptType = body.prompt_type || AppConfig.api.defaultPromptType;
+    const shopId = request.headers.get("X-Shopify-Shop-Id");
+
+    // Rate limiting check
+    const rateLimitResult = checkRateLimit(shopId, conversationId);
+    if (!rateLimitResult.allowed) {
+      console.log(`[CHAT] Rate limit exceeded: ${rateLimitResult.reason}, retry after ${rateLimitResult.retryAfter}s`);
+      return new Response(
+        JSON.stringify({
+          error: AppConfig.errorMessages.rateLimitExceeded,
+          details: AppConfig.errorMessages.rateLimitDetails,
+          retryAfter: rateLimitResult.retryAfter
+        }),
+        {
+          status: 429,
+          headers: {
+            ...getCorsHeaders(request),
+            'Retry-After': String(rateLimitResult.retryAfter)
+          }
+        }
+      );
+    }
+
+    console.log('🆔 [CHAT] Conversation ID:', conversationId);
+    console.log('⚙️ [CHAT] Prompt type:', promptType);
+    console.log('🔐 [CHAT] Shop ID:', shopId);
+    console.log('🌐 [CHAT] Origin:', request.headers.get("Origin"));
 
     // Create a stream for the response
     const responseStream = createSseStream(async (stream) => {
@@ -187,6 +224,11 @@ async function handleChatSession({
   promptType,
   stream
 }) {
+  console.log('🚀 [SESSION] Starting chat session');
+  console.log('🆔 [SESSION] Conversation ID:', conversationId);
+  console.log('💬 [SESSION] User message:', userMessage);
+  console.log('⚙️ [SESSION] Prompt type:', promptType);
+
   // Initialize services
   const claudeService = createClaudeService();
   const toolService = createToolService();
@@ -194,7 +236,12 @@ async function handleChatSession({
   // Initialize MCP client
   const shopId = request.headers.get("X-Shopify-Shop-Id");
   const shopDomain = request.headers.get("Origin");
+  console.log('🏪 [SESSION] Shop domain:', shopDomain);
+  console.log('🔑 [SESSION] Shop ID:', shopId);
+
   const customerMcpEndpoint = await getCustomerMcpEndpoint(shopDomain, conversationId);
+  console.log('🔗 [SESSION] Customer MCP endpoint:', customerMcpEndpoint);
+
   const mcpClient = new MCPClient(
     shopDomain,
     conversationId,
@@ -205,31 +252,72 @@ async function handleChatSession({
   try {
     // Send conversation ID to client
     stream.sendMessage({ type: 'id', conversation_id: conversationId });
+    console.log('📤 [SESSION] Sent conversation ID to client');
 
     // Connect to MCP servers and get available tools
     let storefrontMcpTools = [], customerMcpTools = [];
-
     try {
       storefrontMcpTools = await mcpClient.connectToStorefrontServer();
       customerMcpTools = await mcpClient.connectToCustomerServer();
-
       console.log(`Connected to MCP with ${storefrontMcpTools.length} tools`);
       console.log(`Connected to customer MCP with ${customerMcpTools.length} tools`);
     } catch (error) {
       console.warn('Failed to connect to MCP servers, continuing without tools:', error.message);
     }
 
-    // Prepare conversation state
+    // Préparer l'état de la conversation
     let conversationHistory = [];
-    let productsToDisplay = [];
 
-    // Save user message to the database
+    // Track session start event (fire-and-forget)
+    trackEvent(conversationId, shopId, 'chat_session_started', { promptType });
+
+    // --- A/B TESTING ASSIGNMENT ---
+    let experimentAssignments = {};
+    try {
+      const activeExperiments = await getActiveExperiments();
+      for (const exp of activeExperiments) {
+        const variant = await assignVariant(exp.key, conversationId, shopId);
+        if (variant) {
+          experimentAssignments[exp.key] = {
+            variantKey: variant.key,
+            config: variant.configJson ? JSON.parse(variant.configJson) : {}
+          };
+          trackEvent(conversationId, shopId, 'experiment_exposure', {
+            experimentKey: exp.key,
+            experimentName: exp.name,
+            variantKey: variant.key,
+            variantName: variant.name
+          });
+        }
+      }
+      if (Object.keys(experimentAssignments).length > 0) {
+        console.log(`🧪 [EXPERIMENT] Assigned variants:`, Object.entries(experimentAssignments).map(([k, v]) => `${k}=${v.variantKey}`).join(', '));
+      }
+    } catch (e) {
+      console.warn('[EXPERIMENT] Assignment failed:', e.message);
+    }
+    // --- FIN A/B TESTING ---
+
+    // Sauvegarder le message utilisateur
+    console.log('💾 [SESSION] Saving user message to database');
     await saveMessage(conversationId, 'user', userMessage);
 
-    // Fetch all messages from the database for this conversation
-    const dbMessages = await getConversationHistory(conversationId);
+    // Track user message event
+    trackEvent(conversationId, shopId, 'user_message_received', {
+      messageLength: userMessage.length
+    });
 
-    // Format messages for Claude API
+    // Analyze sentiment (non-blocking, fire-and-forget)
+    analyzeSentimentAsync(userMessage, conversationId, shopId);
+
+    // Extract and persist memory facts from user message (non-blocking)
+    extractAndSaveFacts(conversationId, userMessage, null, shopId)
+      .catch(e => console.warn('[MEMORY] Fact extraction failed:', e.message));
+
+    console.log('📚 [SESSION] Loading conversation history from database');
+    const dbMessages = await getConversationHistory(conversationId);
+    console.log('📊 [SESSION] Total messages in history:', dbMessages.length);
+
     conversationHistory = dbMessages.map(dbMessage => {
       let content;
       try {
@@ -243,107 +331,294 @@ async function handleChatSession({
       };
     });
 
-    // Execute the conversation stream
-    let finalMessage = { role: 'user', content: userMessage };
-
-    while (finalMessage.stop_reason !== "end_turn") {
-      finalMessage = await claudeService.streamConversation(
-        {
-          messages: conversationHistory,
-          promptType,
-          tools: mcpClient.tools
-        },
-        {
-          // Handle text chunks
-          onText: (textDelta) => {
-            stream.sendMessage({
-              type: 'chunk',
-              chunk: textDelta
-            });
-          },
-
-          // Handle complete messages
-          onMessage: (message) => {
-            conversationHistory.push({
-              role: message.role,
-              content: message.content
-            });
-
-            saveMessage(conversationId, message.role, JSON.stringify(message.content))
-              .catch((error) => {
-                console.error("Error saving message to database:", error);
-              });
-
-            // Send a completion message
-            stream.sendMessage({ type: 'message_complete' });
-          },
-
-          // Handle tool use requests
-          onToolUse: async (content) => {
-            const toolName = content.name;
-            const toolArgs = content.input;
-            const toolUseId = content.id;
-
-            const toolUseMessage = `Calling tool: ${toolName} with arguments: ${JSON.stringify(toolArgs)}`;
-
-            stream.sendMessage({
-              type: 'tool_use',
-              tool_use_message: toolUseMessage
-            });
-
-            // Call the tool
-            const toolUseResponse = await mcpClient.callTool(toolName, toolArgs);
-
-            // Handle tool response based on success/error
-            if (toolUseResponse.error) {
-              await toolService.handleToolError(
-                toolUseResponse,
-                toolName,
-                toolUseId,
-                conversationHistory,
-                stream.sendMessage,
-                conversationId
-              );
-            } else {
-              await toolService.handleToolSuccess(
-                toolUseResponse,
-                toolName,
-                toolUseId,
-                conversationHistory,
-                productsToDisplay,
-                conversationId
-              );
-            }
-
-            // Signal new message to client
-            stream.sendMessage({ type: 'new_message' });
-          },
-
-          // Handle content block completion
-          onContentBlock: (contentBlock) => {
-            if (contentBlock.type === 'text') {
-              stream.sendMessage({
-                type: 'content_block_complete',
-                content_block: contentBlock
-              });
-            }
-          }
-        }
-      );
+    // Load full conversation context (context + quotes) in a single call
+    const conversationContext = await loadContext(conversationId);
+    if (conversationContext) {
+      console.log('📋 [SESSION] Loaded conversation context:', {
+        email: conversationContext.customerEmail,
+        name: conversationContext.customerName,
+        company: conversationContext.companyName,
+        messageCount: conversationContext.messageCount,
+        quotes: conversationContext.previousQuotes?.length || 0
+      });
     }
 
-    // Signal end of turn
+    console.log('📝 [SESSION] Parsed conversation history:', conversationHistory.length, 'messages');
+    if (conversationHistory.length > 0) {
+      console.log('📜 [SESSION] Last 3 messages:', JSON.stringify(conversationHistory.slice(-3).map(m => ({
+        role: m.role,
+        contentPreview: typeof m.content === 'string' ? m.content.substring(0, 100) : '[Object]'
+      }))));
+    }
+
+    // --- INTÉGRATION VADF AVEC FALLBACK MCP ---
+    let vadfIntent = undefined; // hoisted for orchestrator access
+    let vadfConfidence = undefined; // hoisted for hybrid scoring
+    if (promptType === 'vadfAssistant' || promptType === 'vadfAutonomousAgent') {
+      console.log('\n\n════════════════════════════════════════════════════════');
+      console.log('🚀🚀🚀 [CHAT] VADF MODE ACTIVATED 🚀🚀🚀');
+      console.log('📝 [CHAT] User message:', userMessage);
+      console.log('📝 [CHAT] Message length:', userMessage?.length);
+      console.log('════════════════════════════════════════════════════════\n');
+
+      // Utilisation du gestionnaire VADF asynchrone
+      const vadfManager = await getVadfManager();
+      console.log('✅ [CHAT] VADF Manager loaded');
+
+      // Classification IA avec fallback regex
+      const classification = await vadfManager.classifyWithAI(userMessage, conversationHistory);
+      vadfIntent = classification.intent;
+      vadfConfidence = classification.confidence;
+      const confidence = vadfConfidence;
+      const extractedEntities = classification.entities || {};
+
+      // Track intent detection event
+      trackEvent(conversationId, shopId, 'intent_detected', {
+        intent: vadfIntent,
+        confidence,
+        source: classification.source,
+        entities: extractedEntities
+      });
+
+      // Update conversation context with extracted entities
+      mergeContext(conversationId, {
+        lastIntent: vadfIntent,
+        customerEmail: extractedEntities.email || conversationContext?.customerEmail || undefined,
+        customerName: extractedEntities.companyName || conversationContext?.customerName || undefined,
+        companyName: extractedEntities.companyName || conversationContext?.companyName || undefined,
+        extractedEntities: JSON.stringify(extractedEntities)
+      }).catch(e => console.warn('[SESSION] Context update failed:', e.message));
+
+      console.log('\n🔍🔍🔍 [CHAT] ===== INTENT DETECTION RESULT ===== 🔍🔍🔍');
+      console.log('🔍 [CHAT] Detected intent:', vadfIntent);
+      console.log('🔍 [CHAT] Confidence:', confidence);
+      console.log('🔍 [CHAT] Source:', classification.source);
+      console.log('🔍 [CHAT] Entities:', JSON.stringify(extractedEntities));
+      console.log('════════════════════════════════════════════════════════\n');
+
+      // Routing basé sur la confiance et le type d'intent
+      const shouldUseMcp = !vadfIntent
+        || vadfIntent === 'unknown'
+        || classification.source === 'ai_fallback'
+        || classification.source === 'ai_generic'
+        || (confidence < 0.5);
+
+      if (shouldUseMcp) {
+        console.log('\n⚠️⚠️⚠️ [CHAT] ===== MCP FALLBACK TRIGGERED ===== ⚠️⚠️⚠️');
+        console.log('🔄 [CHAT] Routing to Claude + Shopify MCP');
+        console.log('🔄 [CHAT] Reason:', classification.source || 'low_confidence');
+        console.log('🛍️ [CHAT] Available Storefront MCP tools:', storefrontMcpTools.length);
+        console.log('👤 [CHAT] Available Customer MCP tools:', customerMcpTools.length);
+        console.log('📝 [CHAT] Claude will search shop data for: "' + userMessage + '"');
+        console.log('════════════════════════════════════════════════════════\n');
+        // Ne pas retourner ici, laisser continuer vers le flux Claude
+      } else {
+        // Intent VADF spécifique détecté, traiter avec le système VADF
+        console.log('✅ [CHAT] VADF-specific intent detected:', vadfIntent, '(confidence:', confidence, ')');
+        console.log('════════════════════════════════════════════════════════');
+
+        let vadfContext = vadfManager.enrichContext({
+          isFirstMessage: conversationHistory.length <= 1
+        });
+        console.log('📋 [CHAT] Initial context:', vadfContext);
+
+        // Utiliser les entités extraites par l'IA (email, companyName, etc.)
+        const email = extractedEntities.email || undefined;
+
+        // Vérification du compte client si l'intention concerne le compte
+        let accountCheckResult = null;
+        if (["mot_de_passe_oublie", "mise_a_jour_infos_entreprise"].includes(vadfIntent)) {
+          console.log('👤 [CHAT] Account-related intent detected:', vadfIntent);
+
+          if (email) {
+            console.log('📧 [CHAT] Email extracted by AI classifier:', email);
+            accountCheckResult = await checkVadfCustomerAccount({ email });
+            console.log('✅ [CHAT] Account check result:', JSON.stringify(accountCheckResult, null, 2));
+          } else {
+            console.log('⚠️ [CHAT] No email found, skipping account check');
+          }
+
+          // Adapter le contexte selon le statut du compte
+          if (accountCheckResult && accountCheckResult.status === "active") {
+            vadfContext = { ...vadfContext, compte_actif: true };
+          } else if (accountCheckResult && accountCheckResult.status === "inactive") {
+            vadfContext = { ...vadfContext, compte_actif: false };
+          }
+        } else if (vadfIntent === 'activation_compte') {
+          console.log('👤 [CHAT] activation_compte intent - using default VADF response');
+        }
+
+        // Enrichir le contexte avec les entités IA et le résultat du check
+        if (accountCheckResult) {
+          vadfContext = {
+            ...vadfContext,
+            email: email,
+            nom: accountCheckResult.nom || undefined,
+            statut_pro: accountCheckResult.status || undefined,
+            telephone: accountCheckResult.telephone || undefined
+          };
+        }
+        // Ajouter les entités IA au contexte même sans account check
+        if (extractedEntities.companyName) {
+          vadfContext.nom_entreprise = extractedEntities.companyName;
+        }
+        if (email && !vadfContext.email) {
+          vadfContext.email = email;
+        }
+
+        let vadfResponse = vadfManager.getResponse(vadfIntent, vadfContext);
+        console.log('📤 [CHAT] VADF response: type=', vadfResponse.type, ', text length=', vadfResponse.text?.length);
+
+        // Override si le check de compte a un message spécifique
+        const shouldUseAccountMessage = accountCheckResult && accountCheckResult.message
+          && !(vadfIntent === 'activation_compte' && accountCheckResult.status === 'not_found');
+
+        if (shouldUseAccountMessage) {
+          console.log('⚠️ [CHAT] OVERRIDE: Using account check message');
+          vadfResponse = { ...vadfResponse, text: accountCheckResult.message };
+        }
+
+        stream.sendMessage({
+          type: 'vadf_response',
+          text: vadfResponse.text,
+          vadf_intent: vadfIntent,
+          vadf_type: vadfResponse.type,
+          vadf_confidence: confidence
+        });
+
+        // Track VADF response event
+        trackEvent(conversationId, shopId, 'vadf_response_sent', {
+          intent: vadfIntent,
+          responseType: vadfResponse.type,
+          confidence
+        });
+
+        // Save assistant response to DB
+        saveMessage(conversationId, 'assistant', vadfResponse.text)
+          .catch(e => console.error('[CHAT] Error saving VADF response:', e));
+
+        // Escalade automatique si utilisateur non pro
+        if (accountCheckResult && accountCheckResult.status === 'not_pro') {
+          stream.sendMessage({
+            type: 'escalade',
+            contact: accountCheckResult.contact,
+            message: 'Escalade automatique : utilisateur non professionnel.'
+          });
+          trackEvent(conversationId, shopId, 'escalation_triggered', { reason: 'not_pro' });
+          upsertConversationOutcome(conversationId, { outcome: 'escalated', shopId });
+        }
+        // Escalade intelligente
+        if (vadfIntent === 'escalade_support' || vadfResponse.type === 'error') {
+          stream.sendMessage({
+            type: 'escalade',
+            contact: 'contact@vadf.fr',
+            message: vadfManager.getCommonPhrase('contact_support')
+          });
+          trackEvent(conversationId, shopId, 'escalation_triggered', { reason: vadfIntent });
+          upsertConversationOutcome(conversationId, { outcome: 'escalated', shopId });
+        }
+
+        // Track outcome for goodbye/thanks -> resolved
+        if (['au_revoir', 'remerciement'].includes(vadfIntent)) {
+          upsertConversationOutcome(conversationId, { outcome: 'resolved', shopId });
+        }
+
+        console.log('✅ [CHAT] VADF response complete, sending end_turn');
+        stream.sendMessage({ type: 'end_turn' });
+
+        // Compute and persist conversion score (non-blocking)
+        getConversationEvents(conversationId).then(events => {
+          const score = computeConversionScore(events);
+          if (score > 0) {
+            upsertConversationOutcome(conversationId, { conversionScore: score, shopId });
+            console.log(`📈 [CONVERSION] Score: ${score} for conversation ${conversationId}`);
+          }
+        }).catch(e => console.warn('[CONVERSION] Score computation failed:', e.message));
+
+        return;
+      }
+    }
+    // --- FIN INTÉGRATION VADF ---
+
+    // --- ORCHESTRATION MULTI-AGENTS ---
+    const { AgentOrchestrator } = await import('../agents/orchestrator.server.js');
+    const orchestrator = new AgentOrchestrator();
+
+    const { agent, routingReason, routingConfidence, routingMethod, scoreBreakdown } = orchestrator.route(userMessage, vadfIntent, conversationContext, vadfConfidence);
+
+    console.log('\n\n════════════════════════════════════════════════════════');
+    console.log(`🤖 [AGENT] Routed to: ${agent.name} (reason: ${routingReason}, confidence: ${routingConfidence}, method: ${routingMethod})`);
+    if (scoreBreakdown) {
+      console.log(`📊 [AGENT] Scores: sales=${scoreBreakdown.scores.sales} support=${scoreBreakdown.scores.support} order=${scoreBreakdown.scores.order}`);
+      if (scoreBreakdown.isAmbiguous) console.log(`⚠️ [AGENT] Ambiguous routing: gap=${scoreBreakdown.gap}`);
+    }
+    console.log('📊 [AGENT] Conversation history length:', conversationHistory.length);
+    console.log('🛠️ [AGENT] Total tools available:', mcpClient.tools?.length || 0);
+    console.log('════════════════════════════════════════════════════════\n');
+
+    // Track routing decision with confidence and score breakdown
+    trackEvent(conversationId, shopId, 'routing_selected', {
+      agentType: agent.name,
+      routingReason,
+      routingConfidence,
+      routingMethod,
+      isAmbiguous: scoreBreakdown?.isAmbiguous || false,
+      scoreGap: scoreBreakdown?.gap,
+      scores: scoreBreakdown?.scores
+    });
+
+    // Update context with agent type
+    mergeContext(conversationId, {
+      lastAgentType: agent.name
+    }).catch(e => console.warn('[SESSION] Agent type update failed:', e.message));
+
+    const { productsToDisplay, turnCount } = await agent.run({
+      claudeService, mcpClient, toolService,
+      conversationHistory, stream, conversationContext,
+      conversationId, shopId
+    });
+
+    console.log('\n════════════════════════════════════════════════════════');
+    console.log(`🏁 [AGENT:${agent.name}] Conversation complete`);
+    console.log('   - Total turns:', turnCount);
+    console.log('   - Products to display:', productsToDisplay.length);
+    console.log('════════════════════════════════════════════════════════\n');
+
     stream.sendMessage({ type: 'end_turn' });
 
-    // Send product results if available
+    // Update conversation summary if threshold reached (non-blocking)
+    const currentMsgCount = conversationContext?.messageCount || conversationHistory.length;
+    updateSummaryIfNeeded(conversationId, conversationHistory, currentMsgCount)
+      .catch(e => console.warn('[MEMORY] Summary update failed:', e.message));
+
+    // Track conversation turn completion
+    trackEvent(conversationId, shopId, 'conversation_turn_complete', {
+      turnCount,
+      agentType: agent.name
+    });
+
     if (productsToDisplay.length > 0) {
+      console.log(`🛍️ [AGENT:${agent.name}] Sending product results:`, productsToDisplay.length, 'products');
       stream.sendMessage({
         type: 'product_results',
         products: productsToDisplay
       });
+
+      trackEvent(conversationId, shopId, 'products_displayed', {
+        count: productsToDisplay.length,
+        products: productsToDisplay.map(p => p.title)
+      });
     }
+
+    // Compute and persist conversion score (non-blocking)
+    getConversationEvents(conversationId).then(events => {
+      const score = computeConversionScore(events);
+      if (score > 0) {
+        upsertConversationOutcome(conversationId, { conversionScore: score, shopId });
+        console.log(`📈 [CONVERSION] Score: ${score} for conversation ${conversationId}`);
+      }
+    }).catch(e => console.warn('[CONVERSION] Score computation failed:', e.message));
   } catch (error) {
-    // The streaming handler takes care of error handling
     throw error;
   }
 }
@@ -356,6 +631,12 @@ async function handleChatSession({
  */
 async function getCustomerMcpEndpoint(shopDomain, conversationId) {
   try {
+    // Check if shopDomain is provided
+    if (!shopDomain) {
+      console.warn('No shop domain provided, skipping customer MCP endpoint setup');
+      return null;
+    }
+
     // Check if the customer account URL exists in the DB
     const existingUrl = await getCustomerAccountUrl(conversationId);
 
@@ -374,13 +655,15 @@ async function getCustomerMcpEndpoint(shopDomain, conversationId) {
       `#graphql
       query shop {
         shop {
-          customerAccountUrl
+          customerAccountsV2 {
+            url
+          }
         }
       }`,
     );
 
     const body = await response.json();
-    const customerAccountUrl = body.data.shop.customerAccountUrl;
+    const customerAccountUrl = body.data.shop.customerAccountsV2.url;
 
     // Store the customer account URL with conversation ID in the DB
     await storeCustomerAccountUrl(conversationId, customerAccountUrl);

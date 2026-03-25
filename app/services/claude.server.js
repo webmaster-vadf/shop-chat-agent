@@ -5,6 +5,7 @@
 import { Anthropic } from "@anthropic-ai/sdk";
 import AppConfig from "./config.server";
 import systemPrompts from "../prompts/prompts.json";
+import { enrichPromptWithContext } from "./context-manager.server";
 
 /**
  * Creates a Claude service instance
@@ -20,6 +21,7 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
    * @param {Object} params - Stream parameters
    * @param {Array} params.messages - Conversation history
    * @param {string} params.promptType - The type of system prompt to use
+   * @param {string} params.language - Language code (fr, en, etc.)
    * @param {Array} params.tools - Available tools for Claude
    * @param {Object} streamHandlers - Stream event handlers
    * @param {Function} streamHandlers.onText - Handles text chunks
@@ -30,10 +32,46 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
   const streamConversation = async ({
     messages,
     promptType = AppConfig.api.defaultPromptType,
-    tools
+    language = 'fr',
+    tools,
+    conversationContext,
+    _customSystemPrompt
   }, streamHandlers) => {
-    // Get system prompt from configuration or use default
-    const systemInstruction = getSystemPrompt(promptType);
+    console.log('\n🔵 [CLAUDE-SERVICE] streamConversation called');
+    console.log('   - Prompt type:', promptType);
+    console.log('   - Language:', language);
+    console.log('   - Messages count:', messages?.length || 0);
+    console.log('   - Tools count:', tools?.length || 0);
+    console.log('   - Model:', AppConfig.api.defaultModel);
+    console.log('   - Max tokens:', AppConfig.api.maxTokens);
+    if (_customSystemPrompt) console.log('   - Using custom system prompt (agent override)');
+
+    // Get system prompt: use agent override if provided, otherwise from config
+    let systemInstruction = _customSystemPrompt || getSystemPrompt(promptType, language);
+
+    // Enrich system prompt with conversation context (via ContextManager)
+    if (conversationContext) {
+      const enriched = enrichPromptWithContext(systemInstruction, conversationContext);
+      if (enriched !== systemInstruction) {
+        console.log('   - Context enrichment added via ContextManager');
+      }
+      systemInstruction = enriched;
+    }
+
+    console.log('   - System prompt length:', systemInstruction?.length || 0);
+    console.log('   - System prompt preview:', systemInstruction?.substring(0, 100) + '...');
+
+    // Log last user message
+    const lastMessage = messages?.[messages.length - 1];
+    if (lastMessage) {
+      console.log('   - Last message role:', lastMessage.role);
+      const contentPreview = typeof lastMessage.content === 'string'
+        ? lastMessage.content.substring(0, 100)
+        : JSON.stringify(lastMessage.content).substring(0, 100);
+      console.log('   - Last message preview:', contentPreview + '...');
+    }
+
+    console.log('🚀 [CLAUDE-SERVICE] Creating message stream...');
 
     // Create stream
     const stream = await anthropic.messages.stream({
@@ -44,42 +82,75 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
       tools: tools && tools.length > 0 ? tools : undefined
     });
 
+    console.log('✅ [CLAUDE-SERVICE] Stream created successfully');
+
     // Set up event handlers
     if (streamHandlers.onText) {
       stream.on('text', streamHandlers.onText);
+      console.log('   - onText handler registered');
     }
 
     if (streamHandlers.onMessage) {
       stream.on('message', streamHandlers.onMessage);
+      console.log('   - onMessage handler registered');
     }
 
     if (streamHandlers.onContentBlock) {
       stream.on('contentBlock', streamHandlers.onContentBlock);
+      console.log('   - onContentBlock handler registered');
     }
+
+    console.log('⏳ [CLAUDE-SERVICE] Waiting for final message...');
 
     // Wait for final message
     const finalMessage = await stream.finalMessage();
 
+    console.log('✅ [CLAUDE-SERVICE] Final message received');
+    console.log('   - Stop reason:', finalMessage.stop_reason);
+    console.log('   - Content blocks:', finalMessage.content?.length || 0);
+    finalMessage.content?.forEach((block, idx) => {
+      console.log(`   - Block[${idx}]:`, block.type);
+    });
+
     // Process tool use requests
     if (streamHandlers.onToolUse && finalMessage.content) {
+      console.log('🔍 [CLAUDE-SERVICE] Checking for tool use in final message');
+      let toolUseCount = 0;
       for (const content of finalMessage.content) {
         if (content.type === "tool_use") {
+          toolUseCount++;
+          console.log(`🔧 [CLAUDE-SERVICE] Processing tool use ${toolUseCount}:`, content.name);
           await streamHandlers.onToolUse(content);
         }
       }
+      if (toolUseCount === 0) {
+        console.log('   - No tool use found in final message');
+      }
     }
+
+    console.log('🔵 [CLAUDE-SERVICE] streamConversation completed\n');
 
     return finalMessage;
   };
 
   /**
-   * Gets the system prompt content for a given prompt type
+   * Gets the system prompt content for a given prompt type and language
    * @param {string} promptType - The prompt type to retrieve
+   * @param {string} language - Language code (fr, en, etc.)
    * @returns {string} The system prompt content
    */
-  const getSystemPrompt = (promptType) => {
-    return systemPrompts.systemPrompts[promptType]?.content ||
+  const getSystemPrompt = (promptType, language = 'fr') => {
+    let basePrompt = systemPrompts.systemPrompts[promptType]?.content ||
       systemPrompts.systemPrompts[AppConfig.api.defaultPromptType].content;
+
+    // Add language-specific instructions
+    if (language === 'fr') {
+      basePrompt += '\n\nIMPORTANT : Répondez EXCLUSIVEMENT en français, même si la question est posée dans une autre langue. Utilisez un français naturel et professionnel.';
+    } else if (language === 'en') {
+      basePrompt += '\n\nIMPORTANT: Always respond in English, regardless of the customer\'s question language. Use natural and fluent English.';
+    }
+
+    return basePrompt;
   };
 
   return {

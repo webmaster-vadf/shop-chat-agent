@@ -8,7 +8,7 @@ A Shopify template app that lets you embed an AI-powered chat widget on your sto
   - Natural-language product discovery
   - Store policy & FAQ lookup
   - Create carts, add or remove items, and initiate checkout
-  - Track orders and initiate returns
+  - Track orders.
 
 ## Developer Docs
 - Everything from installation to deep dives lives on https://shopify.dev/docs/apps/build/storefront-mcp.

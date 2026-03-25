@@ -1,0 +1,24 @@
+{
+  "chat": {
+    "title": "VADF Assistant",
+    "inputPlaceholder": "Tapez votre message ici...",
+    "sendButton": "Envoyer",
+    "closeButton": "Fermer",
+    "typing": "L'assistant tape...",
+    "welcomeMessage": "👋 Bonjour ! Comment puis-je vous aider aujourd'hui ?",
+    "errorMessage": "Désolé, je n'ai pas pu traiter votre demande. Veuillez réessayer plus tard.",
+    "authRequired": "Vous devez vous connecter pour accéder à cette fonctionnalité.",
+    "authInProgress": "Authentification en cours. Veuillez compléter le processus dans la fenêtre popup.",
+    "authSuccess": "Authentification réussie ! Je continue maintenant avec votre demande.",
+    "loadingHistory": "Chargement de l'historique de conversation...",
+    "noProducts": "Aucun produit trouvé",
+    "topProducts": "Produits Recommandés",
+    "addToCart": "Ajouter au Panier",
+    "proceedCheckout": "Finaliser la Commande",
+    "rateLimitError": "Désolé, nos serveurs sont actuellement occupés. Veuillez réessayer plus tard.",
+    "connectionError": "Erreur de connexion. Vérifiez votre connexion internet.",
+    "serverError": "Erreur serveur. Notre équipe technique a été notifiée.",
+    "toolUsePrefix": "Utilisation de l'outil :",
+    "authenticationNeeded": "Connexion nécessaire pour continuer"
+  }
+}

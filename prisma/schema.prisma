@@ -58,6 +58,9 @@ model Conversation {
   messages  Message[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  @@index([createdAt])
+  @@index([updatedAt])
 }
 
 model Message {
@@ -69,6 +72,7 @@ model Message {
   createdAt      DateTime     @default(now())
 
   @@index([conversationId])
+  @@index([createdAt])
 }
 
 model CustomerAccountUrl {
@@ -77,4 +81,198 @@ model CustomerAccountUrl {
   url            String
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+}
+
+// --- Phase 1D: Agent autonome - Mémoire de conversation ---
+
+model ConversationContext {
+  id                String   @id @default(cuid())
+  conversationId    String   @unique
+  customerEmail     String?
+  customerName      String?
+  companyName       String?
+  accountStatus     String?  // "pro", "not_pro", "unknown"
+  lastIntent        String?
+  lastAgentType     String?  // "sales", "support", "order"
+  extractedEntities String?  // JSON blob of entities extracted across the conversation
+  messageCount      Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([conversationId])
+  @@index([customerEmail])
+}
+
+model Quote {
+  id             String   @id @default(cuid())
+  conversationId String
+  customerEmail  String
+  items          String   // JSON: [{title, productId, quantity, unitPrice, lineTotal}]
+  totalAmount    Float
+  currency       String   @default("EUR")
+  status         String   @default("draft") // draft, sent, accepted, expired
+  validUntil     DateTime
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([conversationId])
+  @@index([customerEmail])
+}
+
+// --- Phase 2: Analytics ---
+
+model AnalyticsEvent {
+  id             String   @id @default(cuid())
+  conversationId String
+  shopId         String?
+  eventType      String
+  eventData      String?  // JSON payload
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@index([shopId])
+}
+
+model ConversationOutcome {
+  id              String   @id @default(cuid())
+  conversationId  String   @unique
+  shopId          String?
+  outcome         String   // "resolved", "escalated", "abandoned", "converted", "ongoing"
+  sentiment       String?  // "positive", "neutral", "negative"
+  sentimentScore  Float?
+  resolutionTime  Int?     // seconds
+  messageCount    Int      @default(0)
+  toolsUsed       String?  // JSON array
+  intentsDetected String?  // JSON array
+  aiConfidence    Float?
+  conversionScore Float?   // 0.0-1.0 heuristic conversion likelihood
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([conversationId])
+  @@index([outcome])
+  @@index([sentiment])
+  @@index([createdAt])
+  @@index([shopId])
+}
+
+// --- Phase 3: Messagerie proactive ---
+
+model ProactiveMessage {
+  id             String    @id @default(cuid())
+  shopId         String
+  customerEmail  String?
+  conversationId String?
+  triggerType    String
+  triggerData    String?   // JSON
+  messageContent String
+  status         String    @default("pending") // pending, sent, delivered, failed, cancelled
+  scheduledFor   DateTime
+  sentAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([shopId])
+  @@index([status])
+  @@index([scheduledFor])
+  @@index([customerEmail])
+}
+
+model ProactiveTemplate {
+  id           String   @id @default(cuid())
+  triggerType  String   @unique
+  templateText String
+  delayMinutes Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// --- Ticket 2: Mémoire long-terme (facts + résumé) ---
+
+model MemoryFact {
+  id             String   @id @default(cuid())
+  conversationId String
+  shopId         String?
+  key            String
+  value          String
+  confidence     Float?
+  source         String?  // "user" | "tool" | "inference"
+  lastSeenAt     DateTime @default(now())
+
+  @@unique([conversationId, key])
+  @@index([conversationId])
+  @@index([key])
+}
+
+model ConversationSummary {
+  id             String   @id @default(cuid())
+  conversationId String   @unique
+  summary        String
+  tokenCount     Int?
+  updatedAt      DateTime @updatedAt
+}
+
+// --- Ticket 6: Feedback utilisateur ---
+
+model Feedback {
+  id             String   @id @default(cuid())
+  conversationId String
+  messageId      String?
+  shopId         String?
+  rating         String   // "up" | "down"
+  comment        String?
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([rating])
+  @@index([shopId])
+  @@index([createdAt])
+}
+
+// --- Ticket 7: A/B Testing ---
+
+model Experiment {
+  id          String               @id @default(cuid())
+  key         String               @unique
+  name        String
+  status      String               @default("draft") // "draft" | "running" | "paused" | "ended"
+  description String?
+  startAt     DateTime?
+  endAt       DateTime?
+  variants    ExperimentVariant[]
+  assignments ExperimentAssignment[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+}
+
+model ExperimentVariant {
+  id           String               @id @default(cuid())
+  experimentId String
+  experiment   Experiment           @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  key          String
+  name         String
+  weight       Float                @default(0.5)
+  configJson   String?
+  assignments  ExperimentAssignment[]
+
+  @@index([experimentId])
+}
+
+model ExperimentAssignment {
+  id             String            @id @default(cuid())
+  experimentId   String
+  experiment     Experiment        @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  variantId      String
+  variant        ExperimentVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  conversationId String
+  shopId         String?
+  assignedAt     DateTime          @default(now())
+
+  @@unique([experimentId, conversationId])
+  @@index([conversationId])
+  @@index([variantId])
 }

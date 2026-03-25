@@ -1,0 +1,14 @@
+{
+	"servers": {
+		"my-mcp-server-b50f43c8": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"@shopify/dev-mcp@latest",
+				"-s",
+				"project"
+			]
+		}
+	},
+	"inputs": []
+}

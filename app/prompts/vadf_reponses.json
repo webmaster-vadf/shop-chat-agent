@@ -1,0 +1,381 @@
+{
+  "meta": {
+    "version": "1.1.0",
+    "lastUpdated": "2025-10-06",
+    "author": "VADF",
+    "description": "Réponses-types VADF avec ton professionnel et chaleureux, optimisées pour l'assistance client B2B."
+  },
+  "categories": {
+    "compte": ["creation_compte", "activation_compte", "mot_de_passe_oublie", "mise_a_jour_infos_entreprise"],
+    "support": ["escalade_support", "erreur_generique", "faq"],
+    "produit": ["origine_produit", "personnalisation", "b2b_only", "decouvrir_produits", "commander_produits", "reliquat", "stock_indisponible", "devis", "tarifs", "fiches_techniques", "photos_produits", "materiaux", "fabrication"],
+    "general": ["salutation", "remerciement", "au_revoir"]
+  },
+  "intents": {
+    "creation_compte": {
+      "description": "Création d'un nouveau compte professionnel.",
+      "examples": [
+        "Créer un compte professionnel",
+        "Je souhaite créer un compte VADF",
+        "Comment créer un compte entreprise",
+        "Inscription compte professionnel",
+        "Ouvrir un compte B2B"
+      ],
+      "responses": [
+        {
+          "text": "Pour créer votre compte professionnel VADF, rendez-vous sur notre page d'inscription :\n\n👉 https://vadf.fr/account/register\n\nVous pourrez y renseigner les informations de votre entreprise et créer votre compte.\n\nUne fois inscrit, vous recevrez un e-mail d'activation pour finaliser la création de votre compte.\n\nPour plus d'informations, consultez notre FAQ : https://vadf.fr/pages/faq",
+          "conditions": []
+        }
+      ]
+    },
+    "activation_compte": {
+      "description": "Activation ou réactivation d'un compte entreprise.",
+      "examples": [
+        "Je n'ai pas reçu l'e-mail d'activation de mon compte",
+        "Je n'arrive pas à activer mon compte",
+        "Je n'ai toujours pas accès au site",
+        "Mon compte n'est pas activé"
+      ],
+      "responses": [
+        {
+          "text": "Merci d'écrire à support@vadf.fr en indiquant le nom de votre entreprise, ainsi que l'adresse e-mail ou le numéro de téléphone associé à votre compte, en indiquant \"Activation de compte\" dans l'objet de votre email. Cela nous permettra de vérifier si votre compte est bien enregistré en tant que client professionnel sur notre site.",
+          "conditions": []
+        },
+        {
+          "text": "Votre compte entreprise est associé à l'adresse e-mail {{email}}. Un nouvel e-mail d'activation vient de vous être envoyé.",
+          "conditions": ["email_renvoye == true"],
+          "variables": ["email"]
+        },
+        {
+          "text": "Vous allez recevoir un e-mail d'activation à l'adresse {{email}}. Il vous permettra de créer votre mot de passe et d'accéder à votre compte.",
+          "conditions": ["nouveau_compte == true"],
+          "variables": ["email"]
+        },
+        {
+          "text": "Un e-mail d'invitation au nouveau site VADF vous sera envoyé afin de finaliser la création de votre compte.",
+          "conditions": []
+        },
+        {
+          "text": "Une fois votre compte activé, vous pourrez vous connecter normalement à votre espace client.",
+          "conditions": []
+        }
+      ]
+    },
+    "mot_de_passe_oublie": {
+      "description": "Réinitialisation du mot de passe.",
+      "examples": [
+        "Je ne reçois pas l'e-mail pour réinitialiser mon mot de passe",
+        "La fonction 'Mot de passe oublié' ne fonctionne pas",
+        "Mes identifiants ne sont pas reconnus",
+        "Je n'arrive plus à me connecter",
+        "Réinitialiser mon mot de passe",
+        "Changer mon mot de passe",
+        "Modifier mon mot de passe",
+        "Mot de passe oublié"
+      ],
+      "responses": [
+        {
+          "text": "Si vous souhaitez réinitialiser votre mot de passe, veuillez suivre ces étapes :\n\n1️⃣ Rendez-vous à l'adresse suivante : https://vadf.fr/account/login#recover\n2️⃣ Cliquez sur le lien \"Mot de passe oublié ?\"\n3️⃣ Saisissez l'adresse e-mail associée à votre compte d'entreprise\n4️⃣ Un email sera automatiquement envoyé à cette adresse pour réinitialiser votre mot de passe\n\nPensez à vérifier vos courriers indésirables si vous ne recevez pas l'e-mail.",
+          "conditions": []
+        }
+      ]
+    },
+    "mise_a_jour_infos_entreprise": {
+      "description": "Mise à jour des informations de l'entreprise.",
+      "examples": [
+        "Je souhaite changer mon adresse e-mail",
+        "Pouvez-vous mettre à jour mon compte entreprise ?",
+        "Modifier les coordonnées de ma société",
+        "Mettre à jour les informations de votre entreprise",
+        "Changer mes informations entreprise"
+      ],
+      "responses": [
+        {
+          "text": "Connectez-vous à votre espace client et cliquez sur Mon compte. Vous pouvez modifier :\n– votre mot de passe\n– vos adresses de livraison.\n\nPour mettre à jour les informations liées à votre entreprise, contactez directement votre interlocuteur VADF : support@vadf.fr",
+          "conditions": []
+        }
+      ]
+    },
+    "escalade_support": {
+      "description": "Escalade vers le support VADF.",
+      "examples": [
+        "Je n'arrive toujours pas à me connecter",
+        "Pouvez-vous m'aider ?",
+        "J'ai besoin d'assistance pour mon compte"
+      ],
+      "responses": [
+        {
+          "text": "Merci de nous envoyer les coordonnées de votre entreprise par e-mail à support@vadf.fr. Notre équipe support client prendra contact avec vous rapidement pour résoudre votre problème.",
+          "conditions": []
+        }
+      ]
+    },
+    "origine_produit": {
+      "description": "Questions sur l'origine des produits.",
+      "examples": [
+        "D'où viennent vos produits",
+        "Origine des vêtements",
+        "Provenance des produits",
+        "Fabriqué où"
+      ],
+      "responses": [
+        {
+          "text": "🇫🇷 Tous nos vêtements sont fabriqués en France à partir de matières recyclées et biologiques.\n\nNos ateliers privilégient une production locale et responsable, avec une démarche éthique à chaque étape de fabrication.\n\nPour en savoir plus : https://vadf.fr/pages/faq",
+          "conditions": []
+        }
+      ]
+    },
+    "personnalisation": {
+      "description": "Personnalisation des produits.",
+      "examples": [
+        "Personnaliser un produit",
+        "Broderie sur vêtements",
+        "Impression sur textile",
+        "Marquage personnalisé",
+        "Customisation produits"
+      ],
+      "responses": [
+        {
+          "text": "🎨 Nos produits sont entièrement personnalisables selon vos besoins !\n\nTechniques disponibles :\n✅ Broderie\n✅ Sérigraphie\n✅ Impression numérique\n\nUne fois connecté à votre compte professionnel, vous aurez accès aux guides d'impression détaillés pour chaque technique.\n\n👉 https://vadf.fr/account/login",
+          "conditions": []
+        }
+      ]
+    },
+    "b2b_only": {
+      "description": "Rappel du modèle B2B uniquement.",
+      "examples": [
+        "Puis-je commander en tant que particulier",
+        "Vente aux particuliers",
+        "Je ne suis pas une entreprise"
+      ],
+      "responses": [
+        {
+          "text": "Notre boutique est réservée aux professionnels : acteurs du textile publicitaire, de l'impression ou de la transformation textile, ainsi que toute entreprise revendant des vêtements transformés. Les particuliers ne peuvent pas commander.\n\nPour créer votre compte professionnel : https://vadf.fr/account/register",
+          "conditions": []
+        }
+      ]
+    },
+    "decouvrir_produits": {
+      "description": "Découvrir les produits et leurs caractéristiques.",
+      "examples": [
+        "Découvrir vos produits",
+        "Quels produits proposez-vous",
+        "Voir le catalogue",
+        "Produits disponibles",
+        "Que vendez-vous",
+        "Découvrir nos produits et leurs caractéristiques"
+      ],
+      "responses": [
+        {
+          "text": "Une fois connecté à votre compte entreprise, vous pouvez consulter directement sur la page produit la fiche technique, le guide d'impression ainsi que les visuels disponibles.\n\nPour en savoir plus, vous pouvez consulter notre Blog VADF.\n\n👉 Connectez-vous : https://vadf.fr/account/login",
+          "conditions": []
+        }
+      ]
+    },
+    "commander_produits": {
+      "description": "Commander des produits en stock.",
+      "examples": [
+        "Comment commander",
+        "Passer une commande",
+        "Commander des produits",
+        "Faire un achat",
+        "Acheter des produits"
+      ],
+      "responses": [
+        {
+          "text": "Pour commander des produits en stock :\n\n1️⃣ Connectez-vous à votre compte professionnel\n2️⃣ Parcourez notre catalogue de produits\n3️⃣ Ajoutez les articles souhaités à votre panier\n4️⃣ Finalisez votre commande\n\nLes tarifs et disponibilités sont visibles une fois connecté.\n\n👉 https://vadf.fr/account/login",
+          "conditions": []
+        }
+      ]
+    },
+    "reliquat": {
+      "description": "Demander des produits en reliquat (rupture de stock temporaire).",
+      "examples": [
+        "Qu'est-ce qu'un reliquat",
+        "Produit en rupture de stock",
+        "Commander un produit indisponible",
+        "Demander un reliquat",
+        "Réassort produit"
+      ],
+      "responses": [
+        {
+          "text": "📦 Un reliquat est un produit temporairement en rupture de stock, dont le réapprovisionnement est possible sur demande.\n\nPour demander un reliquat :\n\n1️⃣ Connectez-vous à votre compte professionnel\n2️⃣ Accédez à la fiche du produit indisponible\n3️⃣ Un formulaire apparaît sur la page produit si le stock est épuisé\n4️⃣ Soumettez votre demande directement à la production\n\nNotre équipe vous recontactera rapidement pour confirmer les délais de fabrication.",
+          "conditions": []
+        }
+      ]
+    },
+    "stock_indisponible": {
+      "description": "Produits temporairement indisponibles.",
+      "examples": [
+        "Je ne trouve pas certains articles",
+        "Produit manquant",
+        "Article introuvable",
+        "Pourquoi certains produits sont indisponibles"
+      ],
+      "responses": [
+        {
+          "text": "Certains produits peuvent être temporairement en rupture de stock.\n\nNous proposons :\n✅ Des devis personnalisés\n✅ Des commandes spéciales pour les articles indisponibles\n\nPour toute demande spécifique, contactez-nous : support@vadf.fr\n\nVous pouvez également demander un reliquat directement depuis la fiche produit une fois connecté.",
+          "conditions": []
+        }
+      ]
+    },
+    "devis": {
+      "description": "Demander un devis personnalisé.",
+      "examples": [
+        "Demander un devis",
+        "Obtenir un devis",
+        "Devis personnalisé",
+        "Comment avoir un devis",
+        "Faire une demande de devis"
+      ],
+      "responses": [
+        {
+          "text": "Pour demander un devis personnalisé :\n\n1️⃣ Connectez-vous à votre compte professionnel\n2️⃣ Remplissez le formulaire dédié sur la page de demande de devis\n\n👉 https://vadf.fr/account/login\n\nNotre équipe commerciale vous répondra rapidement avec une proposition adaptée à vos besoins.",
+          "conditions": []
+        }
+      ]
+    },
+    "tarifs": {
+      "description": "Consulter les tarifs des produits.",
+      "examples": [
+        "Voir les prix",
+        "Tarifs des produits",
+        "Combien coûte",
+        "Prix des articles",
+        "Consulter les tarifs"
+      ],
+      "responses": [
+        {
+          "text": "Les tarifs sont accessibles uniquement aux professionnels connectés.\n\nUne fois connecté à votre compte professionnel, les tarifs apparaissent au bas des fiches produits.\n\n👉 Connectez-vous : https://vadf.fr/account/login\n\nPas encore de compte ? Créez votre compte professionnel : https://vadf.fr/account/register",
+          "conditions": []
+        }
+      ]
+    },
+    "fiches_techniques": {
+      "description": "Accéder aux fiches techniques des produits.",
+      "examples": [
+        "Fiches techniques",
+        "Caractéristiques produits",
+        "Spécifications techniques",
+        "Documentation produits",
+        "Guide d'impression"
+      ],
+      "responses": [
+        {
+          "text": "Les fiches techniques, guides d'impression et visuels sont accessibles depuis votre espace client professionnel.\n\nVous y trouverez :\n📄 Fiches techniques détaillées\n🎨 Guides d'impression pour personnalisation\n🖼️ Visuels haute résolution\n\n👉 Connectez-vous : https://vadf.fr/account/login",
+          "conditions": []
+        }
+      ]
+    },
+    "photos_produits": {
+      "description": "Accéder aux photos et visuels des produits.",
+      "examples": [
+        "Où trouver les photos produits",
+        "Photos des produits",
+        "Visuels produits",
+        "Images des articles",
+        "Où sont les photos",
+        "Télécharger les visuels",
+        "Photos haute résolution"
+      ],
+      "responses": [
+        {
+          "text": "Les fiches techniques, guides d'impression et quelques visuels sont accessibles depuis votre espace client professionnel.\n\n👉 Connectez-vous : https://vadf.fr/account/login",
+          "conditions": []
+        }
+      ]
+    },
+    "materiaux": {
+      "description": "Informations sur les matériaux utilisés.",
+      "examples": [
+        "Quels matériaux utilisez-vous",
+        "Matières des produits",
+        "Composition des vêtements",
+        "Tissus utilisés",
+        "Matériaux écologiques"
+      ],
+      "responses": [
+        {
+          "text": "🌿 Chaque produit VADF suit une démarche éthique et respectueuse de l'environnement.\n\nNos vêtements sont fabriqués à partir de :\n✅ Matières recyclées\n✅ Matières biologiques\n\nLes tissus proviennent actuellement de Turquie, permettant de maintenir des tarifs accessibles tout en respectant nos engagements écologiques.\n\nPour plus de détails, consultez le Blog VADF ou les fiches techniques disponibles dans votre espace client.",
+          "conditions": []
+        }
+      ]
+    },
+    "fabrication": {
+      "description": "Informations sur la fabrication des produits.",
+      "examples": [
+        "Où sont fabriqués vos produits",
+        "Fabrication en France",
+        "Production locale",
+        "Vêtements écologiques",
+        "Fabrication responsable"
+      ],
+      "responses": [
+        {
+          "text": "🇫🇷 Nos vêtements sont fabriqués en France à partir de matières recyclées et biologiques.\n\nNos ateliers privilégient :\n✅ Une production locale et responsable\n✅ Des méthodes de fabrication respectueuses de l'environnement\n✅ Une démarche éthique à chaque étape\n\nLes tissus proviennent de Turquie pour maintenir des tarifs accessibles tout en respectant nos engagements écologiques.\n\nPour en savoir plus : https://vadf.fr/pages/faq",
+          "conditions": []
+        }
+      ]
+    },
+    "salutation": {
+      "description": "Salutation d'accueil.",
+      "responses": [
+        {
+        "text": "Bienvenue dans l'univers VADF !\nJe peux vous guider et vous accompagner dans vos démarches.\n\nJe peux vous aider avec :\n\n👤 Compte professionnel\n• Créer un compte professionnel\n• Activer votre compte\n• Mettre à jour vos informations\n• Réinitialiser votre mot de passe\n\n🛍️ Produits et commandes\n• Découvrir nos produits et leurs caractéristiques\n• Consulter les tarifs et fiches techniques\n• Commander des produits en stock\n• Demander des produits en reliquat\n• Obtenir un devis personnalisé\n\n🌿 Fabrication\n• Origine et fabrication des produits\n• Matériaux utilisés (bio/recyclés)\n• Personnalisation (broderie, sérigraphie)",
+        "conditions": []
+        }
+      ]
+    },
+    "remerciement": {
+      "description": "Remerciement.",
+      "responses": [
+        { "text": "Avec plaisir ! N'hésitez pas si vous avez d'autres questions.", "conditions": [] }
+      ]
+    },
+    "au_revoir": {
+      "description": "Message de clôture.",
+      "responses": [
+        { "text": "Au revoir et à bientôt sur vadf.fr !", "conditions": [] }
+      ]
+    },
+    "erreur_generique": {
+      "description": "Gestion des erreurs ou incompréhensions.",
+      "responses": [
+        { "text": "Je n'ai pas bien compris votre demande. Pouvez-vous reformuler ou écrire directement à support@vadf.fr ?", "conditions": ["intent_non_reconnue == true"] }
+      ]
+    },
+    "faq": {
+      "description": "Redirection vers la FAQ pour questions générales.",
+      "examples": [
+        "J'ai une question",
+        "Où trouver plus d'informations",
+        "FAQ",
+        "Aide"
+      ],
+      "responses": [
+        {
+          "text": "Pour toutes vos questions, je vous invite à consulter notre FAQ complète :\n\n👉 https://vadf.fr/pages/faq\n\nVous y trouverez des réponses détaillées sur nos produits, nos services et les modalités de commande.\n\nSi vous ne trouvez pas la réponse à votre question, n'hésitez pas à nous contacter à support@vadf.fr",
+          "conditions": []
+        }
+      ]
+    }
+  },
+  "common_phrases": {
+    "wait": "Un instant, je vérifie cela pour vous...",
+    "contact_support": "Pour toute demande complexe, n'hésitez pas à nous contacter à support@vadf.fr.",
+    "error": "Une erreur est survenue. Merci de réessayer ou d'écrire à support@vadf.fr pour une assistance personnalisée."
+  },
+  "context": {
+    "isFirstMessage": false,
+    "compte_actif": null,
+    "email_renvoye": null,
+    "nouveau_compte": null,
+    "reset_envoye": null,
+    "changement_email": null,
+    "maj_effectuee": null,
+    "escalade": null,
+    "intent_non_reconnue": null,
+    "email": null,
+    "nom_entreprise": null
+  }
+}
