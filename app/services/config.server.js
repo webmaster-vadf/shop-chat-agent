@@ -9,6 +9,7 @@ export const AppConfig = {
     defaultModel: 'claude-3-5-sonnet-20241022',
     maxTokens: 2000,
     defaultPromptType: 'standardAssistant',
+    maxMessageLength: 4000,  // ~1000 tokens
   },
 
   // Error Message Templates
@@ -19,6 +20,7 @@ export const AppConfig = {
     apiKeyError: "Please check your API key in environment variables",
     rateLimitExceeded: "Rate limit exceeded",
     rateLimitDetails: "Please try again later",
+    messageTooLong: "Message too long (max 4000 characters)",
     genericError: "Failed to get response from Claude"
   },
 

@@ -84,6 +84,14 @@ async function handleChatRequest(request) {
       );
     }
 
+    // Validate message length
+    if (typeof userMessage !== 'string' || userMessage.length > AppConfig.api.maxMessageLength) {
+      return new Response(
+        JSON.stringify({ error: AppConfig.errorMessages.messageTooLong }),
+        { status: 400, headers: getSseHeaders(request) }
+      );
+    }
+
     // Generate or use existing conversation ID
     const conversationId = body.conversation_id || Date.now().toString();
     const promptType = body.prompt_type || AppConfig.api.defaultPromptType;
