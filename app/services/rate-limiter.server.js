@@ -65,7 +65,7 @@ export function checkRateLimit(shopId, conversationId) {
 
 /**
  * Periodically clean up stale entries to prevent memory leaks
- * Runs every 5 minutes
+ * Runs every minute (matches rate limit window)
  */
 setInterval(() => {
   const cutoff = Date.now() - WINDOW_MS;
