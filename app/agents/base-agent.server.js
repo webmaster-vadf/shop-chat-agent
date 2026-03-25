@@ -99,6 +99,26 @@ export class BaseAgent {
               const toolArgs = content.input;
               const toolUseId = content.id;
 
+              // Validate tool name is in the known tools list.
+              // Note: by the time onToolUse fires, onMessage has already pushed the
+              // assistant message (containing this tool_use block) to conversationHistory.
+              // Adding a tool_result here is a valid response to that tool_use.
+              const knownToolNames = agentTools.map(t => t.name);
+              if (!knownToolNames.includes(toolName)) {
+                console.warn(`[AGENT:${this.name}] Unknown tool requested: ${toolName}`);
+                conversationHistory.push({
+                  role: 'user',
+                  content: [{
+                    type: 'tool_result',
+                    tool_use_id: toolUseId,
+                    content: `Error: tool "${toolName}" is not available.`,
+                    is_error: true
+                  }]
+                });
+                stream.sendMessage({ type: 'new_message' });
+                return;
+              }
+
               // Track tool usage
               trackEvent(conversationId, shopId, 'tool_used', {
                 toolName,
