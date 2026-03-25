@@ -87,4 +87,4 @@ setInterval(() => {
       conversationRequests.set(key, filtered);
     }
   }
-}, 5 * 60 * 1000);
+}, 60 * 1000); // Clean up every minute (matches rate limit window)
